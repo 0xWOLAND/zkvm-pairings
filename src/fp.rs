@@ -313,7 +313,7 @@ impl Fp {
     /// Computes the multiplicative inverse of this field
     /// element, returning None in the case that this element
     /// is zero.
-    pub fn invert(&self) -> Result<Self, ()> {
+    pub fn invert(&self) -> Option<Self> {
         // Exponentiate by p - 2
         let t = self.pow_vartime(&[
             0xb9fe_ffff_ffff_aaa9,
@@ -325,31 +325,10 @@ impl Fp {
         ]);
 
         if !self.is_zero() {
-            Ok(t)
+            Some(t)
         } else {
-            Err(())
+            None
         }
-    }
-
-    #[inline]
-    const fn subtract_p(&self) -> Fp {
-        let (r0, borrow) = sbb(self.0[0], MODULUS[0], 0);
-        let (r1, borrow) = sbb(self.0[1], MODULUS[1], borrow);
-        let (r2, borrow) = sbb(self.0[2], MODULUS[2], borrow);
-        let (r3, borrow) = sbb(self.0[3], MODULUS[3], borrow);
-        let (r4, borrow) = sbb(self.0[4], MODULUS[4], borrow);
-        let (r5, borrow) = sbb(self.0[5], MODULUS[5], borrow);
-
-        // If underflow occurred on the final limb, borrow = 0xfff...fff, otherwise
-        // borrow = 0x000...000. Thus, we use it as a mask!
-        let r0 = (self.0[0] & borrow) | (r0 & !borrow);
-        let r1 = (self.0[1] & borrow) | (r1 & !borrow);
-        let r2 = (self.0[2] & borrow) | (r2 & !borrow);
-        let r3 = (self.0[3] & borrow) | (r3 & !borrow);
-        let r4 = (self.0[4] & borrow) | (r4 & !borrow);
-        let r5 = (self.0[5] & borrow) | (r5 & !borrow);
-
-        Fp([r0, r1, r2, r3, r4, r5])
     }
 
     #[inline]

@@ -1,3 +1,4 @@
 #[macro_use]
 mod utils;
-mod fp;
+pub mod fp;
+pub mod fp2;
