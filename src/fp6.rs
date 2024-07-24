@@ -407,9 +407,16 @@ mod test {
         let rng = &mut rand::thread_rng();
         for _ in 0..10 {
             let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
-            let a = Fp::from_raw_unchecked(x.clone().try_into().unwrap());
-            let b = Fp::from_raw_unchecked(x.try_into().unwrap());
+            let a = Fp2 {
+                c0: Fp(x.clone().try_into().unwrap()),
+                c1: Fp(y.clone().try_into().unwrap()),
+            };
+            let b = Fp2 {
+                c0: Fp(x.try_into().unwrap()),
+                c1: Fp(y.try_into().unwrap()),
+            };
 
             assert_eq!(a, b)
         }
@@ -419,11 +426,19 @@ mod test {
     fn test_inequality() {
         let rng = &mut rand::thread_rng();
         for _ in 0..10 {
-            let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-            let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let x1 = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let y1 = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let x2 = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let y2 = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
-            let a = Fp::from_raw_unchecked(x.try_into().unwrap());
-            let b = Fp::from_raw_unchecked(y.try_into().unwrap());
+            let a = Fp2 {
+                c0: Fp(x1.clone().try_into().unwrap()),
+                c1: Fp(y1.clone().try_into().unwrap()),
+            };
+            let b = Fp2 {
+                c0: Fp(x2.try_into().unwrap()),
+                c1: Fp(y2.try_into().unwrap()),
+            };
 
             assert_ne!(a, b)
         }

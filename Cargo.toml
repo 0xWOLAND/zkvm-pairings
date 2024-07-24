@@ -5,7 +5,9 @@ edition = "2021"
 
 [dependencies]
 cfg-if = "1.0.0"
+ff = "0.13.0"
 num-bigint = "0.4.6"
 rand = "0.8.5"
 rand_core = "0.6.4"
 rang = "0.1.1"
+subtle = "2.6.1"

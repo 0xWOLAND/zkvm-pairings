@@ -287,7 +287,7 @@ impl_binops_multiplicative!(Fp12, Fp);
 impl_binops_divisible!(Fp12, Fp12);
 #[cfg(test)]
 mod test {
-    use rand::{thread_rng, Rng};
+    use rand::thread_rng;
 
     use super::*;
 
@@ -307,27 +307,10 @@ mod test {
     }
 
     #[test]
-    fn test_equality() {
-        let rng = &mut rand::thread_rng();
-        for _ in 0..10 {
-            let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-
-            let a = Fp::from_raw_unchecked(x.clone().try_into().unwrap());
-            let b = Fp::from_raw_unchecked(x.try_into().unwrap());
-
-            assert_eq!(a, b)
-        }
-    }
-
-    #[test]
     fn test_inequality() {
-        let rng = &mut rand::thread_rng();
         for _ in 0..10 {
-            let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-            let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-
-            let a = Fp::from_raw_unchecked(x.try_into().unwrap());
-            let b = Fp::from_raw_unchecked(y.try_into().unwrap());
+            let a = fp12_rand();
+            let b = fp12_rand();
 
             assert_ne!(a, b)
         }
