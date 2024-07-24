@@ -2,7 +2,7 @@ use crate::fp::*;
 use crate::fp2::*;
 
 use core::fmt;
-use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
 #[cfg(feature = "pairings")]
 use rand_core::RngCore;
@@ -261,6 +261,10 @@ impl Fp6 {
         }
     }
 
+    pub fn div(&self, rhs: &Self) -> Self {
+        self * rhs.invert().unwrap()
+    }
+
     #[inline]
     pub fn square(&self) -> Self {
         let s0 = self.c0.square();
@@ -357,13 +361,178 @@ impl<'a, 'b> Sub<&'b Fp6> for &'a Fp6 {
     }
 }
 
+impl<'a, 'b> Mul<&'b Fp> for &'a Fp6 {
+    type Output = Fp6;
+
+    #[inline]
+    fn mul(self, rhs: &'b Fp) -> Fp6 {
+        Fp6 {
+            c0: self.c0 * rhs,
+            c1: self.c1 * rhs,
+            c2: self.c2 * rhs,
+        }
+    }
+}
+
+impl<'a, 'b> Div<&'b Fp6> for &'a Fp6 {
+    type Output = Fp6;
+
+    #[inline]
+    fn div(self, rhs: &'b Fp6) -> Fp6 {
+        self.div(rhs)
+    }
+}
+
 impl_binops_additive!(Fp6, Fp6);
 impl_binops_multiplicative!(Fp6, Fp6);
+impl_binops_multiplicative!(Fp6, Fp);
+impl_binops_divisible!(Fp6, Fp6);
 
 #[cfg(test)]
 mod test {
+    use rand::{thread_rng, Rng};
+
     use super::*;
 
+    fn fp6_rand() -> Fp6 {
+        Fp6 {
+            c0: Fp2::random(&mut thread_rng()),
+            c1: Fp2::random(&mut thread_rng()),
+            c2: Fp2::random(&mut thread_rng()),
+        }
+    }
+
+    #[test]
+    fn test_equality() {
+        let rng = &mut rand::thread_rng();
+        for _ in 0..10 {
+            let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+
+            let a = Fp::from_raw_unchecked(x.clone().try_into().unwrap());
+            let b = Fp::from_raw_unchecked(x.try_into().unwrap());
+
+            assert_eq!(a, b)
+        }
+    }
+
+    #[test]
+    fn test_inequality() {
+        let rng = &mut rand::thread_rng();
+        for _ in 0..10 {
+            let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+
+            let a = Fp::from_raw_unchecked(x.try_into().unwrap());
+            let b = Fp::from_raw_unchecked(y.try_into().unwrap());
+
+            assert_ne!(a, b)
+        }
+    }
+
+    #[test]
+    fn test_addition_subtraction() {
+        for _ in 0..10 {
+            let a = fp6_rand();
+            let b = fp6_rand();
+            let c = fp6_rand();
+
+            // commutative
+            assert_eq!(a + b, b + a);
+            assert_eq!(a + (b + c), (a + b) + c);
+
+            // additive identity
+            assert_eq!(a + Fp6::zero(), a); // a + 0 = a
+            assert_eq!(a - Fp6::zero(), a); // subtraction identity
+
+            assert_eq!(Fp6::zero() - a, -a); // 0 - a = -a
+            assert_eq!(a - b, a + (-b)); // a - b = a + -b
+            assert_eq!(a - b, a + (b * -Fp6::one())); // a - b = a + b * -1
+
+            assert_eq!(-a, Fp6::zero() - a);
+            assert_eq!(-a, a * -Fp6::one());
+        }
+    }
+
+    #[test]
+    fn test_multiplication() {
+        for _ in 0..10 {
+            let a = fp6_rand();
+            let b = fp6_rand();
+            let c = fp6_rand();
+
+            // commutative
+            assert_eq!(a * b, b * a);
+
+            // associative
+            assert_eq!(a * (b * c), (a * b) * c);
+
+            // distributive
+            assert_eq!(a * (b + c), a * b + a * c);
+        }
+    }
+
+    #[test]
+    fn test_add_equality() {
+        for _ in 0..10 {
+            let a = fp6_rand();
+
+            let _a = Fp6 {
+                c0: a.c0 * Fp::one(),
+                c1: a.c1 * Fp::one(),
+                c2: a.c2 * Fp::one(),
+            };
+
+            assert_eq!(a * Fp::from(0), Fp6::zero());
+            assert_eq!(a * Fp::zero(), Fp6::zero());
+            assert_eq!(a * Fp::one(), a);
+            assert_eq!(a * Fp::from(1), a);
+            assert_eq!(a * Fp::from(2), a + a);
+            assert_eq!(a * Fp::from(3), a + a + a);
+            assert_eq!(a * Fp::from(4), a + a + a + a);
+        }
+    }
+
+    #[test]
+    fn test_square_equality() {
+        for _ in 0..10 {
+            let a = fp6_rand();
+            assert_eq!(a.square(), a * a);
+        }
+    }
+
+    #[test]
+    fn test_sqrt() {
+        let sqr1 = Fp([300855555557, 0, 0, 0, 0, 0]).sqrt().unwrap();
+        assert_eq!(format!("{:?}", sqr1), "0x025e51146a92917731d9d66d63f8c24ed8cae114e7c9d188e3eaa1e79bb19769f5877f9443e03723d9ed1eebbf92df98");
+
+        assert!(Fp([72057594037927816, 0, 0, 0, 0, 0]).sqrt().is_err());
+    }
+
+    #[test]
+    fn test_div() {
+        for _ in 0..10 {
+            let a = fp6_rand();
+
+            // division by one
+            assert_eq!(a / Fp6::one(), a);
+            assert_eq!(a / a, Fp6::one());
+
+            // division by zero
+            assert_eq!(Fp6::zero() / a, Fp6::zero());
+
+            // division distributivity
+            let a = fp6_rand();
+            let b = fp6_rand();
+            let c = fp6_rand();
+
+            assert_eq!((a + b) / c, a / c + b / c);
+
+            // division and multiplication equality
+            let a = fp6_rand();
+            let b = fp6_rand();
+            assert_eq!(a / b, a * b.invert().unwrap());
+        }
+    }
     #[test]
     fn test_arithmetic() {
         use crate::fp::*;
