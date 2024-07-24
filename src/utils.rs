@@ -144,7 +144,7 @@ macro_rules! impl_binops_multiplicative_mixed {
 
             #[inline]
             fn mul(self, rhs: $rhs) -> $output {
-                &self * &rhs
+                &self * rhs
             }
         }
     };
