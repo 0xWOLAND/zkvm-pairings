@@ -6,6 +6,5 @@ pub mod fp2;
 pub mod fp6;
 
 pub mod affine;
-pub mod scalar;
 
 pub mod common;

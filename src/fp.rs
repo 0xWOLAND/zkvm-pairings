@@ -1,5 +1,6 @@
 //! This module provides an implementation of the BLS12-381 base field `GF(p)`
 //! where `p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab`
+use crate::common::Curve;
 use crate::utils::*;
 use cfg_if::cfg_if;
 use core::fmt;
@@ -7,6 +8,7 @@ use core::mem::transmute;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use num_bigint::BigUint;
 use rand::RngCore;
+use std::marker::PhantomData;
 use std::str::FromStr;
 
 cfg_if::cfg_if! {
@@ -20,9 +22,9 @@ cfg_if::cfg_if! {
 
 #[derive(Copy, Clone)]
 /// Represents an element in the finite field Fp.
-pub struct Fp(pub(crate) [u64; 6]);
+pub struct Fp<C: Curve>(pub(crate) [u64; 6], PhantomData<C>);
 
-impl fmt::Debug for Fp {
+impl<C: Curve> fmt::Debug for Fp<C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let tmp = self.to_bytes();
         write!(f, "0x")?;
@@ -33,115 +35,115 @@ impl fmt::Debug for Fp {
     }
 }
 
-impl Default for Fp {
+impl<C: Curve> Default for Fp<C> {
     fn default() -> Self {
-        Fp::zero()
+        Fp::<C>::zero()
     }
 }
 
-impl From<u64> for Fp {
+impl<C: Curve> From<u64> for Fp<C> {
     fn from(value: u64) -> Self {
-        Fp([value, 0, 0, 0, 0, 0])
+        Fp::<C>::from_raw_unchecked([value, 0, 0, 0, 0, 0])
     }
 }
 
 #[cfg(feature = "zeroize")]
 impl zeroize::DefaultIsZeroes for Fp {}
 
-impl Eq for Fp {}
-impl PartialEq for Fp {
+impl<C: Curve> Eq for Fp<C> {}
+impl<C: Curve> PartialEq for Fp<C> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.0.iter().zip(other.0.iter()).all(|(a, b)| a == b)
     }
 }
 
-/// p = 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
-pub(crate) const MODULUS: [u64; 6] = [
-    0xb9fe_ffff_ffff_aaab,
-    0x1eab_fffe_b153_ffff,
-    0x6730_d2a0_f6b0_f624,
-    0x6477_4b84_f385_12bf,
-    0x4b1b_a7b6_434b_acd7,
-    0x1a01_11ea_397f_e69a,
-];
+// /// p = 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
+// pub(crate) const MODULUS: [u64; 6] = [
+//     0xb9fe_ffff_ffff_aaab,
+//     0x1eab_fffe_b153_ffff,
+//     0x6730_d2a0_f6b0_f624,
+//     0x6477_4b84_f385_12bf,
+//     0x4b1b_a7b6_434b_acd7,
+//     0x1a01_11ea_397f_e69a,
+// ];
 
-/// INV = -(p^{-1} mod 2^64) mod 2^64
-const INV: u64 = 0x89f3_fffc_fffc_fffd;
+// /// INV = -(p^{-1} mod 2^64) mod 2^64
+// const INV: u64 = 0x89f3_fffc_fffc_fffd;
 
-/// R = 2^384 mod p
-const R: Fp = Fp([
-    0x7609_0000_0002_fffd,
-    0xebf4_000b_c40c_0002,
-    0x5f48_9857_53c7_58ba,
-    0x77ce_5853_7052_5745,
-    0x5c07_1a97_a256_ec6d,
-    0x15f6_5ec3_fa80_e493,
-]);
+// /// R = 2^384 mod p
+// const R: Fp = Fp([
+//     0x7609_0000_0002_fffd,
+//     0xebf4_000b_c40c_0002,
+//     0x5f48_9857_53c7_58ba,
+//     0x77ce_5853_7052_5745,
+//     0x5c07_1a97_a256_ec6d,
+//     0x15f6_5ec3_fa80_e493,
+// ]);
 
-impl<'a> Neg for &'a Fp {
-    type Output = Fp;
+impl<'a, C: Curve> Neg for &'a Fp<C> {
+    type Output = Fp<C>;
 
     #[inline]
-    fn neg(self) -> Fp {
+    fn neg(self) -> Fp<C> {
         self.neg()
     }
 }
 
-impl Neg for Fp {
-    type Output = Fp;
+impl<C: Curve> Neg for Fp<C> {
+    type Output = Fp<C>;
 
     #[inline]
-    fn neg(self) -> Fp {
+    fn neg(self) -> Fp<C> {
         -&self
     }
 }
 
-impl<'a, 'b> Sub<&'b Fp> for &'a Fp {
-    type Output = Fp;
+impl<'a, 'b, C: Curve> Sub<&'b Fp<C>> for &'a Fp<C> {
+    type Output = Fp<C>;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp) -> Fp {
+    fn sub(self, rhs: &'b Fp<C>) -> Fp<C> {
         self.sub(rhs)
     }
 }
 
-impl<'a, 'b> Add<&'b Fp> for &'a Fp {
-    type Output = Fp;
+impl<'a, 'b, C: Curve> Add<&'b Fp<C>> for &'a Fp<C> {
+    type Output = Fp<C>;
 
     #[inline]
-    fn add(self, rhs: &'b Fp) -> Fp {
+    fn add(self, rhs: &'b Fp<C>) -> Fp<C> {
         self.add(rhs)
     }
 }
 
-impl<'a, 'b> Mul<&'b Fp> for &'a Fp {
-    type Output = Fp;
+impl<'a, 'b, C: Curve> Mul<&'b Fp<C>> for &'a Fp<C> {
+    type Output = Fp<C>;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp) -> Fp {
+    fn mul(self, rhs: &'b Fp<C>) -> Fp<C> {
         self.mul(rhs)
     }
 }
 
-impl<'a, 'b> Div<&'b Fp> for &'a Fp {
-    type Output = Fp;
+impl<'a, 'b, C: Curve> Div<&'b Fp<C>> for &'a Fp<C> {
+    type Output = Fp<C>;
 
     #[inline]
-    fn div(self, rhs: &'b Fp) -> Fp {
+    fn div(self, rhs: &'b Fp<C>) -> Fp<C> {
         self.div(rhs)
     }
 }
 
 cfg_if::cfg_if! {
     if #[cfg(not(target_os = "zkvm"))] {
-        impl_binops_multiplicative!(Fp, Fp);
+        impl_binops_multiplicative!(Fp<C>, Fp<C>);
     }
     else {
-        impl_binops_multiplicative_mixed!(Fp, Fp, Fp);
-        impl MulAssign<Fp> for Fp {
+        impl_binops_multiplicative_mixed!(Fp<C>, Fp<C>, Fp<C>);
+        impl<C: Curve> MulAssign<Fp> for Fp<C> {
             #[inline]
-            fn mul_assign(&mut self, rhs: Fp) {
+            fn mul_assign(&mut self, rhs: Fp<C>) {
                 unsafe {
                     let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
                     let rhs = transmute::<[u64; 6], [u32; 12]>(rhs.0);
@@ -152,29 +154,29 @@ cfg_if::cfg_if! {
             }
         }
 
-        impl<'b> MulAssign<&'b Fp> for Fp{
+        impl<'b, C: Curve> MulAssign<&'b Fp<C>> for Fp<C>{
             #[inline]
-            fn mul_assign(&mut self, rhs: &'b Fp) {
+            fn mul_assign(&mut self, rhs: &'b Fp<C>) {
                 *self = &*self * rhs;
             }
         }
     }
 }
 
-impl_binops_additive!(Fp, Fp);
-impl_binops_divisible!(Fp, Fp);
+impl_binops_additive!(Fp<C>, Fp<C>);
+impl_binops_divisible!(Fp<C>, Fp<C>);
 
-impl Fp {
+impl<C: Curve> Fp<C> {
     /// Returns zero, the additive identity.
     #[inline]
-    pub const fn zero() -> Fp {
-        Fp([0, 0, 0, 0, 0, 0])
+    pub const fn zero() -> Fp<C> {
+        Fp::from_raw_unchecked([0, 0, 0, 0, 0, 0])
     }
 
     /// Returns one, the multiplicative identity.
     #[inline]
-    pub const fn one() -> Fp {
-        Fp([1, 0, 0, 0, 0, 0])
+    pub const fn one() -> Fp<C> {
+        Fp::from_raw_unchecked([1, 0, 0, 0, 0, 0])
     }
 
     /// Checks if this element is zero.
@@ -184,8 +186,8 @@ impl Fp {
 
     /// Attempts to convert a big-endian byte representation of
     /// a scalar into an `Fp`, failing if the input is not canonical.
-    pub fn from_bytes(bytes: &[u8; 48]) -> Result<Fp, ()> {
-        let mut tmp = Fp([0, 0, 0, 0, 0, 0]);
+    pub fn from_bytes(bytes: &[u8; 48]) -> Result<Fp<C>, ()> {
+        let mut tmp = Fp::from_raw_unchecked([0, 0, 0, 0, 0, 0]);
 
         tmp.0[5] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap());
         tmp.0[4] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[8..16]).unwrap());
@@ -195,12 +197,12 @@ impl Fp {
         tmp.0[0] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[40..48]).unwrap());
 
         // Try to subtract the modulus
-        let (_, borrow) = sbb(tmp.0[0], MODULUS[0], 0);
-        let (_, borrow) = sbb(tmp.0[1], MODULUS[1], borrow);
-        let (_, borrow) = sbb(tmp.0[2], MODULUS[2], borrow);
-        let (_, borrow) = sbb(tmp.0[3], MODULUS[3], borrow);
-        let (_, borrow) = sbb(tmp.0[4], MODULUS[4], borrow);
-        let (_, borrow) = sbb(tmp.0[5], MODULUS[5], borrow);
+        let (_, borrow) = sbb(tmp.0[0], C::MODULUS[0], 0);
+        let (_, borrow) = sbb(tmp.0[1], C::MODULUS[1], borrow);
+        let (_, borrow) = sbb(tmp.0[2], C::MODULUS[2], borrow);
+        let (_, borrow) = sbb(tmp.0[3], C::MODULUS[3], borrow);
+        let (_, borrow) = sbb(tmp.0[4], C::MODULUS[4], borrow);
+        let (_, borrow) = sbb(tmp.0[5], C::MODULUS[5], borrow);
 
         // If the element is smaller than MODULUS then the
         // subtraction will underflow, producing a borrow value
@@ -229,19 +231,23 @@ impl Fp {
     }
 
     /// Reduces a big-endian 64-bit limb representation of a 768-bit number.
-    pub fn from_u768(limbs: [u64; 12]) -> Fp {
+    pub fn from_u768(limbs: [u64; 12]) -> Fp<C> {
         // We reduce an arbitrary 768-bit number by decomposing it into two 384-bit digits
         // with the higher bits multiplied by 2^384. Thus, we perform two reductions
         //
         // 1. the lower bits are multiplied by R^2, as normal
         // 2. the upper bits are multiplied by R^2 * 2^384 = R^3
 
-        let d1 = Fp([limbs[11], limbs[10], limbs[9], limbs[8], limbs[7], limbs[6]]);
-        let d0 = Fp([limbs[5], limbs[4], limbs[3], limbs[2], limbs[1], limbs[0]]);
-        d0 + d1 * R
+        let d1 = Fp::<C>::from_raw_unchecked([
+            limbs[11], limbs[10], limbs[9], limbs[8], limbs[7], limbs[6],
+        ]);
+        let d0 = Fp::<C>::from_raw_unchecked([
+            limbs[5], limbs[4], limbs[3], limbs[2], limbs[1], limbs[0],
+        ]);
+        d0 + d1 * Fp::<C>::from_raw_unchecked(C::R)
     }
 
-    pub(crate) fn random(mut rng: impl RngCore) -> Fp {
+    pub(crate) fn random(mut rng: impl RngCore) -> Fp<C> {
         let mut bytes = [0u8; 96];
         rng.fill_bytes(&mut bytes);
 
@@ -264,8 +270,8 @@ impl Fp {
 
     /// Constructs an element of `Fp` without checking that it is
     /// canonical.
-    pub const fn from_raw_unchecked(v: [u64; 6]) -> Fp {
-        Fp(v)
+    pub const fn from_raw_unchecked(v: [u64; 6]) -> Fp<C> {
+        Fp(v, PhantomData::<C>)
     }
 
     /// Although this is labeled "vartime", it is only
@@ -334,18 +340,19 @@ impl Fp {
     #[inline]
     /// Add two field elements together.
     #[cfg(not(target_os = "zkvm"))]
-    pub fn add(&self, rhs: &Fp) -> Fp {
+    pub fn add(&self, rhs: &Fp<C>) -> Fp<C> {
         use num_bigint::BigUint;
 
         unsafe {
             let lhs = BigUint::from_bytes_be(&self.to_bytes());
             let rhs = BigUint::from_bytes_be(&rhs.to_bytes());
 
-            let sum = (lhs + rhs) % BigUint::from_slice(&transmute::<[u64; 6], [u32; 12]>(MODULUS));
+            let sum =
+                (lhs + rhs) % BigUint::from_slice(&transmute::<[u64; 6], [u32; 12]>(C::MODULUS));
 
             let mut sum_slice = sum.to_u32_digits();
             sum_slice.resize(12, 0);
-            Fp(transmute::<[u32; 12], [u64; 6]>(
+            Fp::from_raw_unchecked(transmute::<[u32; 12], [u64; 6]>(
                 sum_slice.try_into().unwrap(),
             ))
         }
@@ -364,13 +371,13 @@ impl Fp {
 
     #[inline]
     /// Returns the negation of this field element.
-    pub const fn neg(&self) -> Fp {
-        let (d0, borrow) = sbb(MODULUS[0], self.0[0], 0);
-        let (d1, borrow) = sbb(MODULUS[1], self.0[1], borrow);
-        let (d2, borrow) = sbb(MODULUS[2], self.0[2], borrow);
-        let (d3, borrow) = sbb(MODULUS[3], self.0[3], borrow);
-        let (d4, borrow) = sbb(MODULUS[4], self.0[4], borrow);
-        let (d5, _) = sbb(MODULUS[5], self.0[5], borrow);
+    pub const fn neg(&self) -> Fp<C> {
+        let (d0, borrow) = sbb(C::MODULUS[0], self.0[0], 0);
+        let (d1, borrow) = sbb(C::MODULUS[1], self.0[1], borrow);
+        let (d2, borrow) = sbb(C::MODULUS[2], self.0[2], borrow);
+        let (d3, borrow) = sbb(C::MODULUS[3], self.0[3], borrow);
+        let (d4, borrow) = sbb(C::MODULUS[4], self.0[4], borrow);
+        let (d5, _) = sbb(C::MODULUS[5], self.0[5], borrow);
 
         // Let's use a mask if `self` was zero, which would mean
         // the result of the subtraction is p.
@@ -378,7 +385,7 @@ impl Fp {
             as u64)
             .wrapping_sub(1);
 
-        Fp([
+        Fp::from_raw_unchecked([
             d0 & mask,
             d1 & mask,
             d2 & mask,
@@ -390,14 +397,14 @@ impl Fp {
 
     #[inline]
     /// Squares this element.
-    pub fn sub(&self, rhs: &Fp) -> Fp {
+    pub fn sub(&self, rhs: &Fp<C>) -> Fp<C> {
         (&rhs.neg()).add(self)
     }
 
     #[inline]
     /// Multiplies two field elements
     #[cfg(not(target_os = "zkvm"))]
-    pub fn mul(&self, rhs: &Fp) -> Fp {
+    pub fn mul(&self, rhs: &Fp<C>) -> Fp<C> {
         use num_bigint::BigUint;
 
         unsafe {
@@ -407,11 +414,11 @@ impl Fp {
             let rhs = BigUint::from_slice(slice_rhs);
 
             let prod =
-                (lhs * rhs) % BigUint::from_slice(&transmute::<[u64; 6], [u32; 12]>(MODULUS));
+                (lhs * rhs) % BigUint::from_slice(&transmute::<[u64; 6], [u32; 12]>(C::MODULUS));
 
             let mut prod_slice = prod.to_u32_digits();
             prod_slice.resize(12, 0);
-            Fp(transmute::<[u32; 12], [u64; 6]>(
+            Fp::from_raw_unchecked(transmute::<[u32; 12], [u64; 6]>(
                 prod_slice.try_into().unwrap(),
             ))
         }
@@ -429,7 +436,7 @@ impl Fp {
         }
     }
 
-    pub fn div(&self, rhs: &Fp) -> Fp {
+    pub fn div(&self, rhs: &Fp<C>) -> Fp<C> {
         self * rhs.invert().unwrap()
     }
 
@@ -443,9 +450,11 @@ impl Fp {
 mod test {
     use rand::Rng;
 
+    use crate::common::Bls12381Curve;
+
     use super::*;
 
-    fn fp_rand() -> Fp {
+    fn fp_rand() -> Fp<Bls12381Curve> {
         let mut rng = rand::thread_rng();
         Fp::random(&mut rng)
     }
@@ -456,8 +465,8 @@ mod test {
         for _ in 0..10 {
             let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
-            let a = Fp::from_raw_unchecked(x.clone().try_into().unwrap());
-            let b = Fp::from_raw_unchecked(x.try_into().unwrap());
+            let a = Fp::<Bls12381Curve>::from_raw_unchecked(x.clone().try_into().unwrap());
+            let b = Fp::<Bls12381Curve>::from_raw_unchecked(x.try_into().unwrap());
 
             assert_eq!(a, b)
         }
@@ -470,8 +479,8 @@ mod test {
             let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
             let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
-            let a = Fp::from_raw_unchecked(x.try_into().unwrap());
-            let b = Fp::from_raw_unchecked(y.try_into().unwrap());
+            let a = Fp::<Bls12381Curve>::from_raw_unchecked(x.try_into().unwrap());
+            let b = Fp::<Bls12381Curve>::from_raw_unchecked(y.try_into().unwrap());
 
             assert_ne!(a, b)
         }
@@ -555,10 +564,16 @@ mod test {
 
     #[test]
     fn test_sqrt() {
-        let sqr1 = Fp([300855555557, 0, 0, 0, 0, 0]).sqrt().unwrap();
+        let sqr1 = Fp::<Bls12381Curve>::from_raw_unchecked([300855555557, 0, 0, 0, 0, 0])
+            .sqrt()
+            .unwrap();
         assert_eq!(format!("{:?}", sqr1), "0x025e51146a92917731d9d66d63f8c24ed8cae114e7c9d188e3eaa1e79bb19769f5877f9443e03723d9ed1eebbf92df98");
 
-        assert!(Fp([72057594037927816, 0, 0, 0, 0, 0]).sqrt().is_err());
+        assert!(
+            Fp::<Bls12381Curve>::from_raw_unchecked([72057594037927816, 0, 0, 0, 0, 0])
+                .sqrt()
+                .is_err()
+        );
     }
 
     #[test]

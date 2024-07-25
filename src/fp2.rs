@@ -1,44 +1,48 @@
 use core::fmt;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use rand_core::RngCore;
+use std::marker::PhantomData;
 
+use crate::common::Curve;
 use crate::fp::Fp;
 
 #[derive(Copy, Clone)]
 /// Represents an element in the field Fp2.
-pub struct Fp2 {
+pub struct Fp2<C: Curve> {
     /// The first component of the Fp2 element.
-    pub c0: Fp,
+    pub c0: Fp<C>,
     /// The second component of the Fp2 element.
-    pub c1: Fp,
+    pub c1: Fp<C>,
+    _marker: PhantomData<C>,
 }
 
-impl fmt::Debug for Fp2 {
+impl<C: Curve> fmt::Debug for Fp2<C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} + {:?}*u", self.c0, self.c1)
     }
 }
 
-impl Default for Fp2 {
+impl<C: Curve> Default for Fp2<C> {
     fn default() -> Self {
         Fp2::zero()
     }
 }
 
 #[cfg(feature = "zeroize")]
-impl zeroize::DefaultIsZeroes for Fp2 {}
+impl<C: Curve> zeroize::DefaultIsZeroes for Fp2<C> {}
 
-impl From<Fp> for Fp2 {
-    fn from(f: Fp) -> Fp2 {
+impl<C: Curve> From<Fp<C>> for Fp2<C> {
+    fn from(f: Fp<C>) -> Fp2<C> {
         Fp2 {
             c0: f,
             c1: Fp::zero(),
+            _marker: PhantomData::<C>,
         }
     }
 }
 
-impl Eq for Fp2 {}
-impl PartialEq for Fp2 {
+impl<C: Curve> Eq for Fp2<C> {}
+impl<C: Curve> PartialEq for Fp2<C> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.c0.eq(&other.c0) & self.c1.eq(&other.c1)
@@ -49,93 +53,92 @@ impl PartialEq for Fp2 {
     }
 }
 
-impl<'a> Neg for &'a Fp2 {
-    type Output = Fp2;
+impl<'a, C: Curve> Neg for &'a Fp2<C> {
+    type Output = Fp2<C>;
 
     #[inline]
-    fn neg(self) -> Fp2 {
+    fn neg(self) -> Fp2<C> {
         self.neg()
     }
 }
 
-impl Neg for Fp2 {
-    type Output = Fp2;
+impl<C: Curve> Neg for Fp2<C> {
+    type Output = Fp2<C>;
 
     #[inline]
-    fn neg(self) -> Fp2 {
+    fn neg(self) -> Fp2<C> {
         -&self
     }
 }
 
-impl<'a, 'b> Sub<&'b Fp2> for &'a Fp2 {
-    type Output = Fp2;
+impl<'a, 'b, C: Curve> Sub<&'b Fp2<C>> for &'a Fp2<C> {
+    type Output = Fp2<C>;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp2) -> Fp2 {
+    fn sub(self, rhs: &'b Fp2<C>) -> Fp2<C> {
         self.sub(rhs)
     }
 }
 
-impl<'a, 'b> Add<&'b Fp2> for &'a Fp2 {
-    type Output = Fp2;
+impl<'a, 'b, C: Curve> Add<&'b Fp2<C>> for &'a Fp2<C> {
+    type Output = Fp2<C>;
 
     #[inline]
-    fn add(self, rhs: &'b Fp2) -> Fp2 {
+    fn add(self, rhs: &'b Fp2<C>) -> Fp2<C> {
         self.add(rhs)
     }
 }
 
-impl<'a, 'b> Mul<&'b Fp2> for &'a Fp2 {
-    type Output = Fp2;
+impl<'a, 'b, C: Curve> Mul<&'b Fp2<C>> for &'a Fp2<C> {
+    type Output = Fp2<C>;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp2) -> Fp2 {
+    fn mul(self, rhs: &'b Fp2<C>) -> Fp2<C> {
         self.mul(rhs)
     }
 }
 
-impl<'a, 'b> Mul<&'b Fp> for &'a Fp2 {
-    type Output = Fp2;
+impl<'a, 'b, C: Curve> Mul<&'b Fp<C>> for &'a Fp2<C> {
+    type Output = Fp2<C>;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp) -> Fp2 {
-        Fp2 {
-            c0: self.c0 * rhs,
-            c1: self.c1 * rhs,
-        }
+    fn mul(self, rhs: &'b Fp<C>) -> Fp2<C> {
+        Fp2::new(self.c0 * rhs, self.c1 * rhs)
     }
 }
 
-impl<'a, 'b> Div<&'b Fp2> for &'a Fp2 {
-    type Output = Fp2;
+impl<'a, 'b, C: Curve> Div<&'b Fp2<C>> for &'a Fp2<C> {
+    type Output = Fp2<C>;
 
     #[inline]
-    fn div(self, rhs: &'b Fp2) -> Fp2 {
+    fn div(self, rhs: &'b Fp2<C>) -> Fp2<C> {
         self.div(rhs)
     }
 }
 
-impl_binops_additive!(Fp2, Fp2);
-impl_binops_multiplicative!(Fp2, Fp2);
-impl_binops_multiplicative!(Fp2, Fp);
-impl_binops_divisible!(Fp2, Fp2);
+impl_binops_additive!(Fp2<C>, Fp2<C>);
+impl_binops_multiplicative!(Fp2<C>, Fp2<C>);
+impl_binops_multiplicative!(Fp2<C>, Fp<C>);
+impl_binops_divisible!(Fp2<C>, Fp2<C>);
 
-impl Fp2 {
+impl<C: Curve> Fp2<C> {
     /// Returns the zero element of Fp2.
     #[inline]
-    pub const fn zero() -> Fp2 {
-        Fp2 {
-            c0: Fp::zero(),
-            c1: Fp::zero(),
-        }
+    pub const fn zero() -> Fp2<C> {
+        Fp2::new(Fp::zero(), Fp::zero())
     }
 
     /// Returns the one element of Fp2.
     #[inline]
-    pub const fn one() -> Fp2 {
+    pub const fn one() -> Fp2<C> {
+        Fp2::new(Fp::one(), Fp::zero())
+    }
+
+    pub const fn new(c0: Fp<C>, c1: Fp<C>) -> Fp2<C> {
         Fp2 {
-            c0: Fp::one(),
-            c1: Fp::zero(),
+            c0,
+            c1,
+            _marker: PhantomData::<C>,
         }
     }
 
@@ -145,11 +148,8 @@ impl Fp2 {
     }
 
     /// Generates a random element in Fp2.
-    pub fn random(mut rng: impl RngCore) -> Fp2 {
-        Fp2 {
-            c0: Fp::random(&mut rng),
-            c1: Fp::random(&mut rng),
-        }
+    pub fn random(mut rng: impl RngCore) -> Fp2<C> {
+        Fp2::new(Fp::random(&mut rng), Fp::random(&mut rng))
     }
 
     /// Raises this element to p.
@@ -163,28 +163,22 @@ impl Fp2 {
     /// Computes the conjugate of this element.
     #[inline(always)]
     pub fn conjugate(&self) -> Self {
-        Fp2 {
-            c0: self.c0,
-            c1: -self.c1,
-        }
+        Fp2::new(self.c0, -self.c1)
     }
 
     /// Multiplies this element by the non-residue.
     #[inline(always)]
-    pub fn mul_by_nonresidue(&self) -> Fp2 {
+    pub fn mul_by_nonresidue(&self) -> Fp2<C> {
         // Multiply a + bu by u + 1, getting
         // au + a + bu^2 + bu
         // and because u^2 = -1, we get
         // (a - b) + (a + b)u
 
-        Fp2 {
-            c0: self.c0 - self.c1,
-            c1: self.c0 + self.c1,
-        }
+        Fp2::new(self.c0 - self.c1, self.c0 + self.c1)
     }
 
     /// Computes the square of this element.
-    pub fn square(&self) -> Fp2 {
+    pub fn square(&self) -> Fp2<C> {
         // Complex squaring:
         //
         // v0  = c0 * c1
@@ -201,14 +195,11 @@ impl Fp2 {
         let b = (&self.c0).sub(&self.c1);
         let c = (&self.c0).add(&self.c0);
 
-        Fp2 {
-            c0: (&a).mul(&b),
-            c1: (&c).mul(&self.c1),
-        }
+        Fp2::new((&a).mul(&b), (&c).mul(&self.c1))
     }
 
     /// Multiplies this element by another element.
-    pub fn mul(&self, rhs: &Fp2) -> Fp2 {
+    pub fn mul(&self, rhs: &Fp2<C>) -> Fp2<C> {
         // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
         // computes the result as:
         //
@@ -221,44 +212,35 @@ impl Fp2 {
         //
         // Each of these is a "sum of products", which we can compute efficiently.
 
-        Fp2 {
-            c0: self.c0 * rhs.c0 - self.c1 * rhs.c1,
-            c1: self.c0 * rhs.c1 + self.c1 * rhs.c0,
-        }
+        Fp2::new(
+            self.c0 * rhs.c0 - self.c1 * rhs.c1,
+            self.c0 * rhs.c1 + self.c1 * rhs.c0,
+        )
     }
 
-    pub fn div(&self, rhs: &Fp2) -> Fp2 {
+    pub fn div(&self, rhs: &Fp2<C>) -> Fp2<C> {
         self * rhs.invert().unwrap()
     }
 
     /// Adds another element to this element.
-    pub fn add(&self, rhs: &Fp2) -> Fp2 {
-        Fp2 {
-            c0: (&self.c0).add(&rhs.c0),
-            c1: (&self.c1).add(&rhs.c1),
-        }
+    pub fn add(&self, rhs: &Fp2<C>) -> Fp2<C> {
+        Fp2::new((&self.c0).add(&rhs.c0), (&self.c1).add(&rhs.c1))
     }
 
     /// Subtracts another element from this element.
-    pub fn sub(&self, rhs: &Fp2) -> Fp2 {
-        Fp2 {
-            c0: (&self.c0).sub(&rhs.c0),
-            c1: (&self.c1).sub(&rhs.c1),
-        }
+    pub fn sub(&self, rhs: &Fp2<C>) -> Fp2<C> {
+        Fp2::new((&self.c0).sub(&rhs.c0), (&self.c1).sub(&rhs.c1))
     }
 
     /// Negates this element.
-    pub const fn neg(&self) -> Fp2 {
-        Fp2 {
-            c0: (&self.c0).neg(),
-            c1: (&self.c1).neg(),
-        }
+    pub const fn neg(&self) -> Fp2<C> {
+        Fp2::new((&self.c0).neg(), (&self.c1).neg())
     }
 
     /// Computes the square root of this element.
     pub fn sqrt(&self) -> Option<Self> {
         if self.is_zero() {
-            return Some(Fp2::zero());
+            return Some(Fp2::<C>::zero());
         }
 
         // a1 = self^((p - 3) / 4)
@@ -279,10 +261,7 @@ impl Fp2 {
         if alpha == -Fp2::one() {
             // The element is order p - 1, so we're just trying to get the square of an element of the subfield Fp.
             // This is given by x0 * u, since u = sqrt(-1). Since the element x0 = a + bu has b = 0, the solution is au.
-            Some(Fp2 {
-                c0: -x0.c1,
-                c1: x0.c0,
-            })
+            Some(Fp2::new(-x0.c1, x0.c0))
         } else {
             // Otherwise, the correct solution is (1 + alpha)^((q - 1) // 2) * x0
             let sqrt = (alpha + Fp2::one()).pow_vartime(&[
@@ -321,10 +300,9 @@ impl Fp2 {
         // of (a + bu). Importantly, this can be computing using
         // only a single inversion in Fp.
 
-        (self.c0.square() + self.c1.square()).invert().map(|t| Fp2 {
-            c0: self.c0 * t,
-            c1: self.c1 * -t,
-        })
+        (self.c0.square() + self.c1.square())
+            .invert()
+            .map(|t| Fp2::new(self.c0 * t, self.c1 * -t))
     }
 
     /// Although this is labeled "vartime", it is only
@@ -363,9 +341,11 @@ impl Fp2 {
 mod test {
     use rand::Rng;
 
+    use crate::common::Bls12381Curve;
+
     use super::*;
 
-    fn fp2_rand() -> Fp2 {
+    fn fp2_rand() -> Fp2<Bls12381Curve> {
         let mut rng = rand::thread_rng();
         Fp2::random(&mut rng)
     }
@@ -377,15 +357,15 @@ mod test {
             let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
             let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
-            let a = Fp2 {
-                c0: Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
-                c1: Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
-            };
+            let a = Fp2::<Bls12381Curve>::new(
+                Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
+                Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
+            );
 
-            let b = Fp2 {
-                c0: Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
-                c1: Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
-            };
+            let b = Fp2::<Bls12381Curve>::new(
+                Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
+                Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
+            );
 
             assert_eq!(a, b)
         }
