@@ -10,7 +10,7 @@ use std::mem::transmute;
 use ff::{Field, PrimeField};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
-use crate::common::Curve;
+use crate::common::{Bls12381Curve, Curve};
 use crate::utils::{adc, sbb};
 
 /// Represents an element of the scalar field $\mathbb{F}_q$ of the BLS12-381 elliptic
@@ -102,11 +102,7 @@ impl<'a, 'b, C: Curve> Add<&'b Fr<C>> for &'a Fr<C> {
 
     #[inline]
     fn add(self, rhs: &'b Fr<C>) -> Fr<C> {
-        println!("lhs: {:?}", self);
-        println!("rhs: {:?}", rhs);
-        let out = self.add(rhs);
-        println!("out: {:?}", out);
-        out
+        self.add(rhs)
     }
 }
 
@@ -147,8 +143,7 @@ impl<C: Curve> Fr<C> {
 
     /// Doubles this field element.
     #[inline]
-    // pub const fn double(&self) -> Fr<C> {
-    pub fn double(&self) -> Fr<C> {
+    pub const fn double(&self) -> Fr<C> {
         // TODO: This can be achieved more efficiently with a bitshift.
         self.add(self)
     }
@@ -386,25 +381,17 @@ impl<C: Curve> Fr<C> {
 
     /// Subtracts `rhs` from `self`, returning the result.
     #[inline]
-    // pub const fn sub(&self, rhs: &Self) -> Self {
-    pub fn sub(&self, rhs: &Self) -> Self {
+    pub const fn sub(&self, rhs: &Self) -> Self {
         let (d0, borrow) = sbb(self.0[0], rhs.0[0], 0);
         let (d1, borrow) = sbb(self.0[1], rhs.0[1], borrow);
         let (d2, borrow) = sbb(self.0[2], rhs.0[2], borrow);
         let (d3, borrow) = sbb(self.0[3], rhs.0[3], borrow);
 
-        println!("lhs: {:?}", self.0);
-        println!("rhs: {:?}", rhs.0);
-        println!("d0: {:?}", d0);
-        println!("d1: {:?}", d1);
-        println!("d2: {:?}", d2);
-        println!("d3: {:?}", d3);
-
         // If underflow occurred on the final limb, borrow = 0xfff...fff, otherwise
         // borrow = 0x000...000. Thus, we use it as a mask to conditionally add the modulus.
-        let (d0, carry) = adc(d0, C::FR_MODULUS[1] & borrow, 0);
-        let (d1, carry) = adc(d1, C::FR_MODULUS[2] & borrow, carry);
-        let (d2, carry) = adc(d2, C::FR_MODULUS[3] & borrow, carry);
+        let (d0, carry) = adc(d0, C::FR_MODULUS[0] & borrow, 0);
+        let (d1, carry) = adc(d1, C::FR_MODULUS[1] & borrow, carry);
+        let (d2, carry) = adc(d2, C::FR_MODULUS[2] & borrow, carry);
         let (d3, _) = adc(d3, C::FR_MODULUS[3] & borrow, carry);
 
         Fr::from_raw([d0, d1, d2, d3])
@@ -412,8 +399,7 @@ impl<C: Curve> Fr<C> {
 
     /// Adds `rhs` to `self`, returning the result.
     #[inline]
-    // pub const fn add(&self, rhs: &Self) -> Self {
-    pub fn add(&self, rhs: &Self) -> Self {
+    pub const fn add(&self, rhs: &Self) -> Self {
         let (d0, carry) = adc(self.0[0], rhs.0[0], 0);
         let (d1, carry) = adc(self.0[1], rhs.0[1], carry);
         let (d2, carry) = adc(self.0[2], rhs.0[2], carry);
@@ -743,10 +729,10 @@ mod test {
         assert_eq!(
             Fr::<Bls12381Curve>::zero(),
             Fr::<Bls12381Curve>::from_u512([
-                Bls12381Curve::MODULUS[0],
-                Bls12381Curve::MODULUS[1],
-                Bls12381Curve::MODULUS[2],
-                Bls12381Curve::MODULUS[3],
+                Bls12381Curve::FR_MODULUS[0],
+                Bls12381Curve::FR_MODULUS[1],
+                Bls12381Curve::FR_MODULUS[2],
+                Bls12381Curve::FR_MODULUS[3],
                 0,
                 0,
                 0,
@@ -795,9 +781,6 @@ mod test {
         .unwrap();
         let a = a.to_u64_digits();
         let b = Bls12381Curve::FR_MODULUS;
-
-        println!("{:?}", a);
-        println!("{:?}", b);
     }
 
     #[test]
