@@ -1,12 +1,25 @@
-use crate::fp::Fp;
-
-pub trait Curve: Clone + Copy {
+pub trait Curve: Clone + Copy + Sync + Send {
     const A: [u64; 6];
     const MAX_BITS: u64;
     const MODULUS: [u64; 6];
     const INV: u64;
     const R: [u64; 6];
+
+    const FR_MODULUS: [u64; 4];
+    const FR_BITS: u64;
+    const FR_GENERATOR: [u64; 4] = [7, 0, 0, 0];
+    const FR_R: [u64; 4];
+    const FR_R2: [u64; 4];
+    const FR_R3: [u64; 4];
+    const FR_INV: u64;
+    const FR_TWO_INV: [u64; 4];
+    const FR_S: u64;
+    const FR_ROOT_OF_UNITY: [u64; 4];
+    const FR_ROOT_OF_UNITY_INV: [u64; 4];
+    const FR_DELTA: [u64; 4];
 }
+// BN254 curve R-value
+// 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
 
 #[derive(Clone, Copy)]
 pub struct Bls12381Curve {}
@@ -34,5 +47,93 @@ impl Curve for Bls12381Curve {
         0x77ce_5853_7052_5745,
         0x5c07_1a97_a256_ec6d,
         0x15f6_5ec3_fa80_e493,
+    ];
+    /// Constant representing the modulus
+    /// q = 0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001
+    const FR_MODULUS: [u64; 4] = [
+        0xffff_ffff_0000_0001,
+        0x53bd_a402_fffe_5bfe,
+        0x3339_d808_09a1_d805,
+        0x73ed_a753_299d_7d48,
+    ];
+
+    // The number of bits needed to represent the modulus.
+    const FR_BITS: u64 = 255;
+
+    // GENERATOR = 7 (multiplicative generator of r-1 order, that is also quadratic nonresidue)
+    const FR_GENERATOR: [u64; 4] = [
+        // 0x0000_000e_ffff_fff1, 0x17e3_63d3_0018_9c0f,
+        // 0xff9c_5787_6f84_57b0,
+        // 0x3513_3220_8fc5_a8c4,
+        7, 0, 0, 0,
+    ];
+
+    /// INV = -(q^{-1} mod 2^64) mod 2^64
+    const FR_INV: u64 = 0xffff_fffe_ffff_ffff;
+
+    /// R = 2^256 mod q
+    const FR_R: [u64; 4] = [
+        0x0000_0001_ffff_fffe,
+        0x5884_b7fa_0003_4802,
+        0x998c_4fef_ecbc_4ff5,
+        0x1824_b159_acc5_056f,
+    ];
+
+    /// R^2 = 2^512 mod q
+    const FR_R2: [u64; 4] = [
+        0xc999_e990_f3f2_9c6d,
+        0x2b6c_edcb_8792_5c23,
+        0x05d3_1496_7254_398f,
+        0x0748_d9d9_9f59_ff11,
+    ];
+
+    /// R^3 = 2^768 mod q
+    const FR_R3: [u64; 4] = [
+        0xc62c_1807_439b_73af,
+        0x1b3e_0d18_8cf0_6990,
+        0x73d1_3c71_c7b5_f418,
+        0x6e2a_5bb9_c8db_33e9,
+    ];
+
+    /// 2^-1
+    const FR_TWO_INV: [u64; 4] = [
+        0x7fffffff80000001,
+        0xa9ded2017fff2dff,
+        0x199cec0404d0ec02,
+        0x39f6d3a994cebea4,
+    ];
+
+    // 2^S * t = MODULUS - 1 with t odd
+    const FR_S: u64 = 32;
+
+    /// GENERATOR^t where t * 2^s + 1 = q
+    /// with t odd. In other words, this
+    /// is a 2^s root of unity.
+    ///
+    /// `GENERATOR = 7 mod q` is a generator
+    /// of the q - 1 order multiplicative
+    /// subgroup.
+    const FR_ROOT_OF_UNITY: [u64; 4] = [
+        0x3829971f439f0d2b,
+        0xb63683508c2280b9,
+        0xd09b681922c813b4,
+        0x16a2a19edfe81f20,
+    ];
+
+    /// ROOT_OF_UNITY^-1
+    const FR_ROOT_OF_UNITY_INV: [u64; 4] = [
+        0xFB4D6E13CF19A78,
+        0x6F67D4A2B566F833,
+        0xED4F2F74A35D0168,
+        0x538A6F66E19C653,
+    ];
+
+    /// GENERATOR^{2^s} where t * 2^s + 1 = q with t odd.
+    /// In other words, this is a t root of unity.
+    const FR_DELTA: [u64; 4] = [
+        0x6c083479590189d7,
+        0xf6502437c6a09c00,
+        0x43cab354fabb0062,
+        0x8634d0aa021aaf8,
     ];
 }
