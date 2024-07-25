@@ -20,39 +20,34 @@ pub const fn mac(a: u64, b: u64, c: u64, carry: u64) -> (u64, u64) {
 }
 
 macro_rules! impl_add_binop_specify_output {
-    ($lhs:ident, $rhs:ident, $output:ident) => {
-        impl<'b> Add<&'b $rhs> for $lhs {
+    ($lhs:ty, $rhs:ty, $output:ty) => {
+        impl<'b, C: Curve> Add<&'b $rhs> for $lhs {
             type Output = $output;
-
             #[inline]
             fn add(self, rhs: &'b $rhs) -> $output {
-                &self + rhs
+                <&$lhs>::add(&self, rhs)
             }
         }
-
-        impl<'a> Add<$rhs> for &'a $lhs {
+        impl<'a, C: Curve> Add<$rhs> for &'a $lhs {
             type Output = $output;
-
             #[inline]
             fn add(self, rhs: $rhs) -> $output {
-                self + &rhs
+                self.add(&rhs)
             }
         }
-
-        impl Add<$rhs> for $lhs {
+        impl<C: Curve> Add<$rhs> for $lhs {
             type Output = $output;
-
             #[inline]
             fn add(self, rhs: $rhs) -> $output {
-                &self + &rhs
+                <&$lhs>::add(&self, &rhs)
             }
         }
     };
 }
 
 macro_rules! impl_sub_binop_specify_output {
-    ($lhs:ident, $rhs:ident, $output:ident) => {
-        impl<'b> Sub<&'b $rhs> for $lhs {
+    ($lhs:ty, $rhs:ty, $output:ty) => {
+        impl<'b, C: Curve> Sub<&'b $rhs> for $lhs {
             type Output = $output;
 
             #[inline]
@@ -61,7 +56,7 @@ macro_rules! impl_sub_binop_specify_output {
             }
         }
 
-        impl<'a> Sub<$rhs> for &'a $lhs {
+        impl<'a, C: Curve> Sub<$rhs> for &'a $lhs {
             type Output = $output;
 
             #[inline]
@@ -70,7 +65,7 @@ macro_rules! impl_sub_binop_specify_output {
             }
         }
 
-        impl Sub<$rhs> for $lhs {
+        impl<C: Curve> Sub<$rhs> for $lhs {
             type Output = $output;
 
             #[inline]
@@ -82,15 +77,15 @@ macro_rules! impl_sub_binop_specify_output {
 }
 
 macro_rules! impl_binops_additive_specify_output {
-    ($lhs:ident, $rhs:ident, $output:ident) => {
+    ($lhs:ty, $rhs:ty, $output:ty) => {
         impl_add_binop_specify_output!($lhs, $rhs, $output);
         impl_sub_binop_specify_output!($lhs, $rhs, $output);
     };
 }
 
 macro_rules! impl_binops_divisible_mixed {
-    ($lhs:ident, $rhs:ident, $output:ident) => {
-        impl<'b> Div<&'b $rhs> for $lhs {
+    ($lhs:ty, $rhs:ty, $output:ty) => {
+        impl<'b, C: Curve> Div<&'b $rhs> for $lhs {
             type Output = $output;
 
             #[inline]
@@ -99,7 +94,7 @@ macro_rules! impl_binops_divisible_mixed {
             }
         }
 
-        impl<'a> Div<$rhs> for &'a $lhs {
+        impl<'a, C: Curve> Div<$rhs> for &'a $lhs {
             type Output = $output;
 
             #[inline]
@@ -108,7 +103,7 @@ macro_rules! impl_binops_divisible_mixed {
             }
         }
 
-        impl Div<$rhs> for $lhs {
+        impl<C: Curve> Div<$rhs> for $lhs {
             type Output = $output;
 
             #[inline]
@@ -120,8 +115,8 @@ macro_rules! impl_binops_divisible_mixed {
 }
 
 macro_rules! impl_binops_multiplicative_mixed {
-    ($lhs:ident, $rhs:ident, $output:ident) => {
-        impl<'b> Mul<&'b $rhs> for $lhs {
+    ($lhs:ty, $rhs:ty, $output:ty) => {
+        impl<'b, C: Curve> Mul<&'b $rhs> for $lhs {
             type Output = $output;
 
             #[inline]
@@ -130,7 +125,7 @@ macro_rules! impl_binops_multiplicative_mixed {
             }
         }
 
-        impl<'a> Mul<$rhs> for &'a $lhs {
+        impl<'a, C: Curve> Mul<$rhs> for &'a $lhs {
             type Output = $output;
 
             #[inline]
@@ -139,7 +134,7 @@ macro_rules! impl_binops_multiplicative_mixed {
             }
         }
 
-        impl Mul<$rhs> for $lhs {
+        impl<C: Curve> Mul<$rhs> for $lhs {
             type Output = $output;
 
             #[inline]
@@ -151,31 +146,31 @@ macro_rules! impl_binops_multiplicative_mixed {
 }
 
 macro_rules! impl_binops_additive {
-    ($lhs:ident, $rhs:ident) => {
+    ($lhs:ty, $rhs:ty) => {
         impl_binops_additive_specify_output!($lhs, $rhs, $lhs);
 
-        impl SubAssign<$rhs> for $lhs {
+        impl<C: Curve> SubAssign<$rhs> for $lhs {
             #[inline]
             fn sub_assign(&mut self, rhs: $rhs) {
                 *self = &*self - &rhs;
             }
         }
 
-        impl AddAssign<$rhs> for $lhs {
+        impl<C: Curve> AddAssign<$rhs> for $lhs {
             #[inline]
             fn add_assign(&mut self, rhs: $rhs) {
                 *self = &*self + &rhs;
             }
         }
 
-        impl<'b> SubAssign<&'b $rhs> for $lhs {
+        impl<'b, C: Curve> SubAssign<&'b $rhs> for $lhs {
             #[inline]
             fn sub_assign(&mut self, rhs: &'b $rhs) {
                 *self = &*self - rhs;
             }
         }
 
-        impl<'b> AddAssign<&'b $rhs> for $lhs {
+        impl<'b, C: Curve> AddAssign<&'b $rhs> for $lhs {
             #[inline]
             fn add_assign(&mut self, rhs: &'b $rhs) {
                 *self = &*self + rhs;
@@ -185,17 +180,17 @@ macro_rules! impl_binops_additive {
 }
 
 macro_rules! impl_binops_multiplicative {
-    ($lhs:ident, $rhs:ident) => {
+    ($lhs:ty, $rhs:ty) => {
         impl_binops_multiplicative_mixed!($lhs, $rhs, $lhs);
 
-        impl MulAssign<$rhs> for $lhs {
+        impl<C: Curve> MulAssign<$rhs> for $lhs {
             #[inline]
             fn mul_assign(&mut self, rhs: $rhs) {
                 *self = &*self * &rhs;
             }
         }
 
-        impl<'b> MulAssign<&'b $rhs> for $lhs {
+        impl<'b, C: Curve> MulAssign<&'b $rhs> for $lhs {
             #[inline]
             fn mul_assign(&mut self, rhs: &'b $rhs) {
                 *self = &*self * rhs;
@@ -205,17 +200,17 @@ macro_rules! impl_binops_multiplicative {
 }
 
 macro_rules! impl_binops_divisible {
-    ($lhs:ident, $rhs:ident) => {
+    ($lhs:ty, $rhs:ty) => {
         impl_binops_divisible_mixed!($lhs, $rhs, $lhs);
 
-        impl DivAssign<$rhs> for $lhs {
+        impl<C: Curve> DivAssign<$rhs> for $lhs {
             #[inline]
             fn div_assign(&mut self, rhs: $rhs) {
                 *self = &*self / &rhs;
             }
         }
 
-        impl<'b> DivAssign<&'b $rhs> for $lhs {
+        impl<'b, C: Curve> DivAssign<&'b $rhs> for $lhs {
             #[inline]
             fn div_assign(&mut self, rhs: &'b $rhs) {
                 *self = &*self / rhs;
