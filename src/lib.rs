@@ -9,4 +9,6 @@ pub mod fr;
 pub mod g1;
 pub mod g2;
 
+pub mod pairings;
+
 pub mod common;
