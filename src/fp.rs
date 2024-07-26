@@ -2,19 +2,17 @@
 //! where `p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab`
 use crate::common::{Curve, FieldElement};
 use crate::utils::*;
-use cfg_if::cfg_if;
 use core::fmt;
 use core::mem::transmute;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-use num_bigint::BigUint;
 use rand::RngCore;
-use sp1_zkvm::lib::{io, unconstrained};
 use std::marker::PhantomData;
-use std::str::FromStr;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
         use sp1_zkvm::syscalls::{bls12381_sys_bigint, syscall_bls12381_fp_mulmod};
+        use num_bigint::BigUint;
+        use sp1_zkvm::lib::{io, unconstrained};
     }
 }
 
@@ -58,29 +56,6 @@ impl<C: Curve> PartialEq for Fp<C> {
         self.0.iter().zip(other.0.iter()).all(|(a, b)| a == b)
     }
 }
-
-// /// p = 4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787
-// pub(crate) const MODULUS: [u64; 6] = [
-//     0xb9fe_ffff_ffff_aaab,
-//     0x1eab_fffe_b153_ffff,
-//     0x6730_d2a0_f6b0_f624,
-//     0x6477_4b84_f385_12bf,
-//     0x4b1b_a7b6_434b_acd7,
-//     0x1a01_11ea_397f_e69a,
-// ];
-
-// /// INV = -(p^{-1} mod 2^64) mod 2^64
-// const INV: u64 = 0x89f3_fffc_fffc_fffd;
-
-// /// R = 2^384 mod p
-// const R: Fp = Fp([
-//     0x7609_0000_0002_fffd,
-//     0xebf4_000b_c40c_0002,
-//     0x5f48_9857_53c7_58ba,
-//     0x77ce_5853_7052_5745,
-//     0x5c07_1a97_a256_ec6d,
-//     0x15f6_5ec3_fa80_e493,
-// ]);
 
 impl<'a, C: Curve> Neg for &'a Fp<C> {
     type Output = Fp<C>;

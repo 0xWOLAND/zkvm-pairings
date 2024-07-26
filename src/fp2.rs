@@ -311,20 +311,6 @@ impl<C: Curve> Fp2<C> {
         }
         res
     }
-
-    pub(crate) fn pow_vartime_extended(&self, by: &[u64]) -> Self {
-        let mut res = Self::one();
-        for e in by.iter().rev() {
-            for i in (0..64).rev() {
-                res = res.square();
-
-                if ((*e >> i) & 1) == 1 {
-                    res *= self;
-                }
-            }
-        }
-        res
-    }
 }
 
 impl<C: Curve> FieldElement for Fp2<C> {} // For `AffinePoint` trait
