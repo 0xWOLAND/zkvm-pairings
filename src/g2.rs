@@ -85,23 +85,24 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
     }
 
     fn double(&self) -> Self {
+        if self.is_infinity {
+            return Self::identity();
+        }
         let x = self.x;
         let y = self.y;
 
+        // Check if y is zero
         if y.is_zero() {
             return Self::identity();
         }
 
-        let three = Fp2::<C>::from(Fp::from(3));
-        let two = Fp2::<C>::from(Fp::from(2));
-
-        let slope = (three * x.square()) / (two * y);
-        let xr = slope.square() - two * x;
-        let yr = slope * (x - xr) - y;
+        let slope = (x.square() * Fp2::<C>::from(Fp::from(3))) / (y * Fp2::<C>::from(Fp::from(2)));
+        let x_new = slope.square() - x - x;
+        let y_new = slope * (x - x_new) - y;
 
         Self {
-            x: xr,
-            y: yr,
+            x: x_new,
+            y: y_new,
             is_infinity: false,
             _marker: PhantomData::<C>,
         }
@@ -282,42 +283,42 @@ mod test {
         assert!(!tmp.is_zero());
 
         assert_eq!(
-            G2Affine::from(tmp),
+            tmp,
             G2Affine::<Bls12381Curve>::new(
                 Fp2::<Bls12381Curve>::new(
                     Fp::from_raw_unchecked([
-                        0xe9d9_e2da_9620_f98b,
-                        0x54f1_1993_46b9_7f36,
-                        0x3db3_b820_376b_ed27,
-                        0xcfdb_31c9_b0b6_4f4c,
-                        0x41d7_c127_8635_4493,
-                        0x0571_0794_c255_c064,
+                        0xc952aacab827a053,
+                        0x81f14b0bf3611b78,
+                        0xe1ea1e1e4d00dbae,
+                        0x3bc0b995b8825e0e,
+                        0xd2370f17cc7ed586,
+                        0x1638533957d540a9,
                     ]),
                     Fp::from_raw_unchecked([
-                        0xd6c1_d3ca_6ea0_d06e,
-                        0xda0c_bd90_5595_489f,
-                        0x4f53_52d4_3479_221d,
-                        0x8ade_5d73_6f8c_97e0,
-                        0x48cc_8433_925e_f70e,
-                        0x08d7_ea71_ea91_ef81,
+                        0x6178288c47c33577,
+                        0xc6c886f6b57ec72a,
+                        0x728114d1031e1572,
+                        0xd70662a904ba1074,
+                        0x9f520e47730a124f,
+                        0x0a4edef9c1ed7f72,
                     ]),
                 ),
                 Fp2::<Bls12381Curve>::new(
                     Fp::from_raw_unchecked([
-                        0x15ba_26eb_4b0d_186f,
-                        0x0d08_6d64_b7e9_e01e,
-                        0xc8b8_48dd_652f_4c78,
-                        0xeecf_46a6_123b_ae4f,
-                        0x255e_8dd8_b6dc_812a,
-                        0x1641_42af_21dc_f93f,
+                        0x999d95d71e4c9899,
+                        0xe88dece9764bf3bd,
+                        0xbfe6bd221e47aa8a,
+                        0x9a66da69bf91009c,
+                        0x0aeb8dca2b525678,
+                        0x0468fb440d82b063,
                     ]),
                     Fp::from_raw_unchecked([
-                        0xf9b4_a1a8_9598_4db4,
-                        0xd417_b114_cccf_f748,
-                        0x6856_301f_c89f_086e,
-                        0x41c7_7787_8931_e3da,
-                        0x3556_b155_066a_2105,
-                        0x00ac_f7d3_25cb_89cf,
+                        0xacdefd8b6e36ccf3,
+                        0x422e1aa0a59c8967,
+                        0x97003f7a13c308f5,
+                        0xa43253d9c66c4116,
+                        0x38b361543f887136,
+                        0x0f6d4552fa65dd26,
                     ]),
                 ),
                 false,

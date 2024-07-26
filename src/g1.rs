@@ -83,7 +83,7 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
         let x = self.x;
         let y = self.y;
 
-        if y.is_zero() {
+        if self.is_infinity {
             return Self::identity();
         }
 
