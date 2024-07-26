@@ -22,8 +22,8 @@ impl<C: Curve> From<Fp<C>> for Fp6<C> {
     fn from(f: Fp<C>) -> Fp6<C> {
         Fp6 {
             c0: Fp2::from(f),
-            c1: Fp2::zero(),
-            c2: Fp2::zero(),
+            c1: Fp2::from(f),
+            c2: Fp2::from(f),
             _marker: PhantomData::<C>,
         }
     }

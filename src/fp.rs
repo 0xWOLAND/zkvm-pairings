@@ -446,7 +446,7 @@ impl<C: Curve> Fp<C> {
     }
 }
 
-impl<C: Curve> FieldElement for Fp<C> {}
+impl<C: Curve> FieldElement for Fp<C> {} // For `AffinePoint` trait
 
 #[cfg(test)]
 mod test {
@@ -528,6 +528,26 @@ mod test {
             // distributive
             assert_eq!(a * (b + c), a * b + a * c);
         }
+
+        let a = Fp::<Bls12381Curve>::from_raw_unchecked([
+            0xfb3af00adb22c6bb,
+            0x6c55e83ff97a1aef,
+            0xa14e3a3f171bac58,
+            0xc3688c4f9774b905,
+            0x2695638c4fa9ac0f,
+            0x17f1d3a73197d794,
+        ]);
+        let b = Fp::<Bls12381Curve>::from_raw_unchecked([
+            0x2e01fffffffefffe,
+            0xde17d813620a0002,
+            0xddb3a93be6f89688,
+            0xba69c6076a0f77ea,
+            0x5f19672fdf76ce51,
+            0x0,
+        ]);
+        let a_times_b = a * b;
+        println!("{:?}", a_times_b);
+        println!("{:?}", a_times_b);
     }
 
     #[test]

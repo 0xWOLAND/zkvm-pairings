@@ -10,6 +10,7 @@ use crate::{fp::Fp, fr::Fr};
 struct G1Affine<C: Curve> {
     x: Fp<C>,
     y: Fp<C>,
+    is_infinity: bool,
     _marker: PhantomData<C>,
 }
 
@@ -22,17 +23,19 @@ impl<C: Curve> PartialEq for G1Affine<C> {
 impl<C: Curve> AffinePoint<C> for G1Affine<C> {
     type Dtype = Fp<C>;
 
-    fn new(x: Self::Dtype, y: Self::Dtype) -> Self {
+    fn new(x: Self::Dtype, y: Self::Dtype, is_infinity: bool) -> Self {
         G1Affine {
             x,
             y,
+            is_infinity,
             _marker: PhantomData::<C>,
         }
     }
-    fn zero() -> Self {
+    fn identity() -> Self {
         G1Affine {
             x: Fp::zero(),
-            y: Fp::zero(),
+            y: Fp::one(),
+            is_infinity: true,
             _marker: PhantomData::<C>,
         }
     }
@@ -45,6 +48,7 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
         G1Affine {
             x: Fp::from_raw_unchecked(C::G1_X),
             y: Fp::from_raw_unchecked(C::G1_Y),
+            is_infinity: false,
             _marker: PhantomData::<C>,
         }
     }
@@ -70,6 +74,7 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
         Self {
             x,
             y,
+            is_infinity: false,
             _marker: PhantomData::<C>,
         }
     }
@@ -79,7 +84,7 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
         let y = self.y;
 
         if y.is_zero() {
-            return G1Affine::<C>::new(x, Fp::zero());
+            return Self::identity();
         }
 
         let slope = (Fp::from(3) * x.square()) / (Fp::from(2) * y);
@@ -89,6 +94,7 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
         Self {
             x: xr,
             y: yr,
+            is_infinity: false,
             _marker: PhantomData::<C>,
         }
     }
@@ -104,7 +110,7 @@ impl<C: Curve> G1Affine<C> {
     }
 
     fn endomorphism(&self) -> Self {
-        G1Affine::new(self.x * Fp::from_raw_unchecked(C::BETA), self.y) // BETA is a nontrivial third root of unity in Fp
+        G1Affine::new(self.x * Fp::from_raw_unchecked(C::BETA), self.y, false) // BETA is a nontrivial third root of unity in Fp
     }
 
     fn mul_by_x(&self) -> Self {
@@ -125,6 +131,7 @@ impl<'a, C: Curve> Neg for &'a G1Affine<C> {
         G1Affine {
             x: self.x,
             y: -self.y,
+            is_infinity: self.is_infinity,
             _marker: PhantomData::<C>,
         }
     }
@@ -135,22 +142,23 @@ impl<'a, 'b, C: Curve> Mul<&'b Fr<C>> for &'a G1Affine<C> {
 
     #[inline]
     fn mul(self, other: &'b Fr<C>) -> G1Affine<C> {
-        let mut acc = G1Affine::<C>::zero();
+        let mut xself = G1Affine::<C>::identity();
+        let mut acc = *self;
 
         for bit in other
             .0
             .iter()
-            .rev()
-            .flat_map(|&x| (0..64).rev().map(move |i| (x >> i) & 1 == 1))
+            .flat_map(|&x| (0..64).map(move |i| (x >> i) & 1 == 1))
+            .skip(1)
         {
             acc = acc.double();
 
             if bit {
-                acc = acc.add(self);
+                xself += &acc;
             }
         }
 
-        acc
+        xself
     }
 }
 
@@ -159,11 +167,11 @@ impl<'a, 'b, C: Curve> Add<&'b G1Affine<C>> for &'a G1Affine<C> {
 
     #[inline]
     fn add(self, other: &'b G1Affine<C>) -> G1Affine<C> {
-        if self.is_zero() {
+        if self.is_infinity {
             return *other;
         }
 
-        if other.is_zero() {
+        if other.is_infinity {
             return *self;
         }
 
@@ -183,6 +191,7 @@ impl<'a, 'b, C: Curve> Add<&'b G1Affine<C>> for &'a G1Affine<C> {
         G1Affine {
             x: xr,
             y: yr,
+            is_infinity: false,
             _marker: PhantomData::<C>,
         }
     }
@@ -223,11 +232,13 @@ mod test {
             let a = G1Affine::<Bls12381Curve>::new(
                 Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
                 Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
+                false,
             );
 
             let b = G1Affine::<Bls12381Curve>::new(
                 Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
                 Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
+                false,
             );
 
             assert_eq!(a, b)
@@ -253,8 +264,9 @@ mod test {
                 0xf45c6e4fc2780554,
                 0x7481b1f261aabac,
             ]),
+            false,
         );
-        assert!(a.is_valid().is_ok());
+        assert!(G1Affine::<Bls12381Curve>::generator().is_valid().unwrap() == ());
     }
 
     #[test]
@@ -276,6 +288,7 @@ mod test {
                 0xa09e30ed741d8ae4,
                 0x08b3f481e3aaa0f1,
             ]),
+            false,
         );
         let a_double = G1Affine::<Bls12381Curve>::new(
             Fp::from_raw_unchecked([
@@ -294,6 +307,7 @@ mod test {
                 0x22fda673779d8e38,
                 0x166a9d8cabc673a3,
             ]),
+            false,
         );
         assert_eq!(a.double(), a_double);
 
@@ -314,6 +328,7 @@ mod test {
                 0xf45c6e4fc2780554,
                 0x7481b1f261aabac,
             ]),
+            false,
         );
 
         let b_double = G1Affine::<Bls12381Curve>::new(
@@ -333,6 +348,7 @@ mod test {
                 0x1a49b9965eca3cb8,
                 0x2a1bc189e36902d,
             ]),
+            false,
         );
 
         for _ in 0..10 {
