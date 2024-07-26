@@ -40,6 +40,10 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
         }
     }
 
+    fn is_identity(&self) -> bool {
+        self.is_infinity
+    }
+
     fn is_zero(&self) -> bool {
         self.x.is_zero() && self.y.is_zero()
     }
@@ -60,7 +64,7 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
     }
 
     fn is_valid(&self) -> Result<(), String> {
-        if self.is_zero() {
+        if self.is_infinity {
             return Ok(());
         }
         if !self.is_on_curve() {
@@ -279,6 +283,78 @@ mod test {
             let lhs = &a * &k;
             let rhs = (0..r).fold(G2Affine::<Bls12381Curve>::identity(), |acc, _| acc + &a);
             assert_eq!(lhs, rhs);
+        }
+    }
+
+    #[test]
+    fn test_affine_addition() {
+        {
+            let a = G2Affine::<Bls12381Curve>::identity();
+            let b = G2Affine::<Bls12381Curve>::identity();
+            let c = &a + &b;
+            assert!(c.is_identity());
+            assert!(c.is_valid().is_ok());
+        }
+        {
+            let a = G2Affine::<Bls12381Curve>::identity();
+            let b = G2Affine::<Bls12381Curve>::new(
+                Fp2::new(
+                    Fp::from_raw_unchecked([
+                        0xd48056c8c121bdb8,
+                        0x0bac0326a805bbef,
+                        0xb4510b647ae3d177,
+                        0xc6e47ad4fa403b02,
+                        0x260805272dc51051,
+                        0x024aa2b2f08f0a91,
+                    ]),
+                    Fp::from_raw_unchecked([
+                        0xe5ac7d055d042b7e,
+                        0x334cf11213945d57,
+                        0xb5da61bbdc7f5049,
+                        0x596bd0d09920b61a,
+                        0x7dacd3a088274f65,
+                        0x13e02b6052719f60,
+                    ]),
+                ),
+                Fp2::new(
+                    Fp::from_raw_unchecked([
+                        0xe193548608b82801,
+                        0x923ac9cc3baca289,
+                        0x6d429a695160d12c,
+                        0xadfd9baa8cbdd3a7,
+                        0x8cc9cdc6da2e351a,
+                        0x0ce5d527727d6e11,
+                    ]),
+                    Fp::from_raw_unchecked([
+                        0xaaa9075ff05f79be,
+                        0x3f370d275cec1da1,
+                        0x267492ab572e99ab,
+                        0xcb3e287e85a763af,
+                        0x32acd2b02bc28b99,
+                        0x0606c4a02ea734cc,
+                    ]),
+                ),
+                false,
+            );
+            let c = a + b;
+            assert!(!c.is_identity());
+            assert!(c.is_on_curve());
+            assert!(c == G2Affine::<Bls12381Curve>::generator());
+        }
+        {
+            let a = G2Affine::<Bls12381Curve>::generator().double().double();
+            let b = G2Affine::<Bls12381Curve>::generator().double();
+            let c = a + b;
+
+            let mut d = G2Affine::<Bls12381Curve>::generator();
+            for _ in 0..5 {
+                d += G2Affine::<Bls12381Curve>::generator();
+            }
+            assert!(!c.is_identity());
+            assert!(c.is_on_curve());
+            assert!(!d.is_identity());
+            assert!(d.is_on_curve());
+            assert_eq!(c, d);
         }
     }
 

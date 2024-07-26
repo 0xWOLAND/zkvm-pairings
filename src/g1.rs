@@ -40,6 +40,10 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
         }
     }
 
+    fn is_identity(&self) -> bool {
+        self.is_infinity
+    }
+
     fn is_zero(&self) -> bool {
         self.x.is_zero() && self.y.is_zero()
     }
@@ -54,7 +58,7 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
     }
 
     fn is_valid(&self) -> Result<(), String> {
-        if self.is_zero() {
+        if self.is_identity() {
             return Ok(());
         }
 
@@ -83,7 +87,7 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
         let x = self.x;
         let y = self.y;
 
-        if self.is_infinity {
+        if self.is_identity() {
             return Self::identity();
         }
 
