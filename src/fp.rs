@@ -141,7 +141,7 @@ cfg_if::cfg_if! {
     }
     else {
         impl_binops_multiplicative_mixed!(Fp<C>, Fp<C>, Fp<C>);
-        impl<C: Curve> MulAssign<Fp> for Fp<C> {
+        impl<C: Curve> MulAssign<Fp<C>> for Fp<C> {
             #[inline]
             fn mul_assign(&mut self, rhs: Fp<C>) {
                 unsafe {
@@ -149,7 +149,7 @@ cfg_if::cfg_if! {
                     let rhs = transmute::<[u64; 6], [u32; 12]>(rhs.0);
                     syscall_bls12381_fp_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
 
-                    *self = Fp(transmute::<[u32; 12], [u64; 6]>(lhs));
+                    *self = Fp::<C>::from_raw_unchecked(transmute::<[u32; 12], [u64; 6]>(lhs));
                 }
             }
         }
@@ -359,7 +359,7 @@ impl<C: Curve> Fp<C> {
     }
 
     #[cfg(target_os = "zkvm")]
-    pub fn add(&self, rhs: &Fp) -> Fp {
+    pub fn add(&self, rhs: &Fp<C>) -> Fp<C> {
         let mut result: [u32; 12] = [0; 12];
         unsafe {
             let lhs = transmute::<&[u64; 6], &[u32; 12]>(&self.0);
@@ -426,7 +426,7 @@ impl<C: Curve> Fp<C> {
 
     /// Multiplies two field elements
     #[cfg(target_os = "zkvm")]
-    pub fn mul(&self, rhs: &Fp) -> Fp {
+    pub fn mul(&self, rhs: &Fp<C>) -> Fp<C> {
         let mut result: [u32; 12] = [0; 12];
         unsafe {
             let lhs = transmute::<&[u64; 6], &[u32; 12]>(&self.0);

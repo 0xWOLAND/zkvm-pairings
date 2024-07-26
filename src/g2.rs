@@ -6,7 +6,7 @@ use crate::fp::Fp;
 use crate::{fp2::Fp2, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
-struct G2Affine<C: Curve> {
+pub struct G2Affine<C: Curve> {
     x: Fp2<C>,
     y: Fp2<C>,
     is_infinity: bool,
