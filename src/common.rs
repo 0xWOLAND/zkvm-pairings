@@ -20,6 +20,7 @@ pub(crate) trait AffinePoint<C: Curve>:
     type Dtype: FieldElement;
     fn new(x: Self::Dtype, y: Self::Dtype, is_infinity: bool) -> Self;
     fn identity() -> Self;
+    fn is_identity(&self) -> bool;
     fn is_zero(&self) -> bool;
     fn generator() -> Self;
     fn is_valid(&self) -> Result<(), String>;
