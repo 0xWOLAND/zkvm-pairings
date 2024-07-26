@@ -96,8 +96,11 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
             return Self::identity();
         }
 
-        let slope = (x.square() * Fp2::<C>::from(Fp::from(3))) / (y * Fp2::<C>::from(Fp::from(2)));
-        let x_new = slope.square() - x - x;
+        let three = Fp::<C>::from(3);
+        let two = Fp::<C>::from(2);
+
+        let slope = (x.square() * three) / (y * two);
+        let x_new = slope.square() - x * two;
         let y_new = slope * (x - x_new) - y;
 
         Self {
@@ -124,7 +127,6 @@ impl<C: Curve> G2Affine<C> {
     }
 
     fn mul_by_x(&self) -> Self {
-        println!("C::X: {:?}", Fr::<C>::from(C::X));
         self * Fr::from(C::X)
     }
 
@@ -141,7 +143,6 @@ impl<C: Curve> G2Affine<C> {
                 0x1a0111ea397fe699,
             ]),
         );
-        println!("psi_coeff_x: {:?}", psi_coeff_x.c1);
         // 1 / ((u+1) ^ (p-1)/2)
         let psi_coeff_y = Fp2::<C>::new(
             Fp::from_raw_unchecked([
@@ -172,8 +173,6 @@ impl<C: Curve> G2Affine<C> {
     fn is_torsion_free(&self) -> bool {
         let lhs = self.psi();
         let rhs = -&self.mul_by_x();
-        println!("lhs: {:?}", lhs);
-        println!("rhs: {:?}", rhs);
         lhs == rhs
     }
 }
@@ -196,28 +195,23 @@ impl<'a, 'b, C: Curve> Mul<&'b Fr<C>> for &'a G2Affine<C> {
 
     #[inline]
     fn mul(self, other: &'b Fr<C>) -> G2Affine<C> {
-        let mut xself = G2Affine::<C>::identity();
-        let mut acc = *self;
-        let mut i = 0;
+        let mut acc = G2Affine::<C>::identity();
 
         for bit in other
             .0
             .iter()
-            .flat_map(|&x| (0..64).map(move |i| (x >> i) & 1 == 1))
+            .rev()
+            .flat_map(|&x| (0..64).rev().map(move |i| (x >> i) & 1 == 1))
             .skip(1)
         {
-            println!("ACC before: {:?}", acc);
             acc = acc.double();
 
             if bit {
-                println!("({}) added: {:?}", i, acc);
-                xself += &acc;
+                acc += self;
             }
-            i += 1;
         }
-        println!("iterations: {:?}", i);
 
-        xself
+        acc
     }
 }
 
@@ -271,8 +265,22 @@ impl_binops_additive!(G2Affine<C>, G2Affine<C>);
 #[cfg(test)]
 mod test {
     use crate::common::Bls12381Curve;
+    use rand::Rng;
 
     use super::*;
+
+    #[test]
+    fn test_scalar_multiplication() {
+        let mut rng = rand::thread_rng();
+        for _ in 0..10 {
+            let r: u64 = rng.gen::<u64>() % 100;
+            let k = Fr::<Bls12381Curve>::from(r);
+            let a = G2Affine::<Bls12381Curve>::random(&mut rng);
+            let lhs = &a * &k;
+            let rhs = (0..r).fold(G2Affine::<Bls12381Curve>::identity(), |acc, _| acc + &a);
+            assert_eq!(lhs, rhs);
+        }
+    }
 
     #[test]
     fn test_doubling() {
@@ -367,8 +375,7 @@ mod test {
             ),
             false,
         );
-        // assert!(!bool::from(a.is_torsion_free()));
-        println!("Generator: {:?}", G2Affine::<Bls12381Curve>::generator());
+        assert!(!a.is_torsion_free());
         assert!(G2Affine::<Bls12381Curve>::generator().is_torsion_free());
     }
 }
