@@ -7,7 +7,7 @@ use crate::common::{AffinePoint, Curve};
 use crate::{fp::Fp, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
-struct G1Affine<C: Curve> {
+pub struct G1Affine<C: Curve> {
     x: Fp<C>,
     y: Fp<C>,
     is_infinity: bool,

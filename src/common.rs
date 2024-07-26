@@ -8,7 +8,7 @@ pub(crate) trait FieldElement:
 {
 }
 
-pub(crate) trait AffinePoint<C: Curve>:
+pub trait AffinePoint<C: Curve>:
     Add<Output = Self>
     + AddAssign
     + Sub<Output = Self>
