@@ -8,6 +8,7 @@ use core::mem::transmute;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use num_bigint::BigUint;
 use rand::RngCore;
+use sp1_zkvm::lib::{io, unconstrained};
 use std::marker::PhantomData;
 use std::str::FromStr;
 
@@ -230,6 +231,14 @@ impl<C: Curve> Fp<C> {
         res
     }
 
+    pub fn from_bytes_unsafe(bytes: &[u8; 48]) -> Fp<C> {
+        unsafe { transmute::<[u8; 48], Fp<C>>(*bytes) }
+    }
+
+    pub fn to_bytes_unsafe(self) -> [u8; 48] {
+        unsafe { transmute::<[u64; 6], [u8; 48]>(self.0) }
+    }
+
     /// Reduces a big-endian 64-bit limb representation of a 768-bit number.
     pub fn from_u768(limbs: [u64; 12]) -> Fp<C> {
         // We reduce an arbitrary 768-bit number by decomposing it into two 384-bit digits
@@ -319,9 +328,10 @@ impl<C: Curve> Fp<C> {
     /// Computes the multiplicative inverse of this field
     /// element, returning None in the case that this element
     /// is zero.
+    #[cfg(not(target_os = "zkvm"))]
     pub fn invert(&self) -> Option<Self> {
         // Exponentiate by p - 2
-        let t = self.pow_vartime(&[
+        let inv = self.pow_vartime(&[
             0xb9fe_ffff_ffff_aaa9,
             0x1eab_fffe_b153_ffff,
             0x6730_d2a0_f6b0_f624,
@@ -330,10 +340,34 @@ impl<C: Curve> Fp<C> {
             0x1a01_11ea_397f_e69a,
         ]);
 
-        if !self.is_zero() {
-            Some(t)
-        } else {
-            None
+        Some(inv).filter(|_| !self.is_zero())
+    }
+
+    #[cfg(target_os = "zkvm")]
+    pub fn invert(&self) -> Option<Self> {
+        use sp1_zkvm::io::FD_HINT;
+
+        // Compute the inverse using the zkvm syscall
+        unconstrained! {
+            let mut buf = [0u8; 48];
+            // Exponentiate by p - 2
+            let t = self.pow_vartime(&[
+                0xb9fe_ffff_ffff_aaa9,
+                0x1eab_fffe_b153_ffff,
+                0x6730_d2a0_f6b0_f624,
+                0x6477_4b84_f385_12bf,
+                0x4b1b_a7b6_434b_acd7,
+                0x1a01_11ea_397f_e69a,
+            ]);
+            buf.copy_from_slice(&t.to_bytes_unsafe());
+            io::write(FD_HINT, &buf);
+        }
+
+        let byte_vec = io::read_vec();
+        let bytes: [u8; 48] = byte_vec.try_into().unwrap();
+        unsafe {
+            let inv = Fp::<C>::from_bytes_unsafe(&bytes);
+            Some(inv).filter(|_| !self.is_zero() && self * inv == Fp::one())
         }
     }
 
