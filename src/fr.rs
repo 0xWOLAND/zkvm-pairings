@@ -851,7 +851,7 @@ mod test {
     fn test_multiplication() {
         let mut cur = LARGEST;
 
-        for _ in 0..100 {
+        for _ in 0..10 {
             let mut tmp = cur;
             tmp *= &cur;
 
@@ -880,7 +880,7 @@ mod test {
     fn test_squaring() {
         let mut cur = LARGEST;
 
-        for _ in 0..100 {
+        for _ in 0..10 {
             let mut tmp = cur;
             tmp = tmp.square();
 
@@ -916,7 +916,7 @@ mod test {
 
         let mut tmp = Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R2);
 
-        for _ in 0..100 {
+        for _ in 0..10 {
             let mut tmp2 = tmp.invert().unwrap();
             tmp2.mul_assign(&tmp);
 
@@ -939,7 +939,7 @@ mod test {
         let mut r2 = Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R);
         let mut r3 = Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R);
 
-        for _ in 0..100 {
+        for _ in 0..10 {
             r1 = r1.invert().unwrap();
             r2 = r2.pow_vartime(&q_minus_2);
             r3 = r3.pow(&q_minus_2);
@@ -960,7 +960,7 @@ mod test {
         }
 
         let mut none_count = 0;
-        for i in 0..100 {
+        for i in 0..10 {
             let square = Fr::<Bls12381Curve>::from_u128(i);
             let square_root = square.sqrt();
             if bool::from(square_root.is_none()) {

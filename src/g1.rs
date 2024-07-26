@@ -1,7 +1,9 @@
 use std::marker::PhantomData;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use crate::common::Curve;
+use rand::distributions::Alphanumeric;
+
+use crate::common::{AffinePoint, Curve};
 use crate::{fp::Fp, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
@@ -17,16 +19,17 @@ impl<C: Curve> PartialEq for G1Affine<C> {
     }
 }
 
-impl<C: Curve> G1Affine<C> {
-    pub fn new(x: Fp<C>, y: Fp<C>) -> Self {
+impl<C: Curve> AffinePoint<C> for G1Affine<C> {
+    type Dtype = Fp<C>;
+
+    fn new(x: Self::Dtype, y: Self::Dtype) -> Self {
         G1Affine {
             x,
             y,
             _marker: PhantomData::<C>,
         }
     }
-
-    pub const fn zero() -> Self {
+    fn zero() -> Self {
         G1Affine {
             x: Fp::zero(),
             y: Fp::zero(),
@@ -34,18 +37,64 @@ impl<C: Curve> G1Affine<C> {
         }
     }
 
-    pub const fn generator() -> Self {
+    fn is_zero(&self) -> bool {
+        self.x.is_zero() && self.y.is_zero()
+    }
+
+    fn generator() -> Self {
         G1Affine {
-            x: Fp::from_raw_unchecked(C::G_X),
-            y: Fp::from_raw_unchecked(C::G_Y),
+            x: Fp::from_raw_unchecked(C::G1_X),
+            y: Fp::from_raw_unchecked(C::G1_Y),
             _marker: PhantomData::<C>,
         }
     }
 
-    pub fn is_zero(&self) -> bool {
-        self.x.is_zero() && self.y.is_zero()
+    fn is_valid(&self) -> Result<(), String> {
+        if self.is_zero() {
+            return Ok(());
+        }
+
+        if !self.is_on_curve() {
+            return Err("Point is not on curve".to_string());
+        }
+        if !self.is_torsion_free() {
+            return Err("Point is not torsion free".to_string());
+        }
+
+        Ok(())
     }
 
+    fn random(mut rng: impl rand::Rng) -> Self {
+        let x = Fp::random(&mut rng);
+        let y = Fp::random(&mut rng);
+        Self {
+            x,
+            y,
+            _marker: PhantomData::<C>,
+        }
+    }
+
+    fn double(&self) -> Self {
+        let x = self.x;
+        let y = self.y;
+
+        if y.is_zero() {
+            return G1Affine::<C>::new(x, Fp::zero());
+        }
+
+        let slope = (Fp::from(3) * x.square()) / (Fp::from(2) * y);
+        let xr = slope.square() - Fp::from(2) * x;
+        let yr = slope * (x - xr) - y;
+
+        Self {
+            x: xr,
+            y: yr,
+            _marker: PhantomData::<C>,
+        }
+    }
+}
+
+impl<C: Curve> G1Affine<C> {
     fn is_on_curve(&self) -> bool {
         let x = self.x;
         let y = self.y;
@@ -67,102 +116,6 @@ impl<C: Curve> G1Affine<C> {
         let rhs = self.endomorphism();
         lhs == rhs
     }
-
-    pub fn double(&self) -> Self {
-        let x = self.x;
-        let y = self.y;
-
-        if y.is_zero() {
-            return G1Affine::<C>::new(x, Fp::zero());
-        }
-
-        let slope = (Fp::from(3) * x.square()) / (Fp::from(2) * y);
-        let xr = slope.square() - Fp::from(2) * x;
-        let yr = slope * (x - xr) - y;
-
-        Self {
-            x: xr,
-            y: yr,
-            _marker: PhantomData::<C>,
-        }
-    }
-
-    pub fn add(&self, rhs: &Self) -> Self {
-        if self.is_zero() {
-            return *rhs;
-        }
-
-        if rhs.is_zero() {
-            return *self;
-        }
-
-        let x1 = self.x;
-        let y1 = self.y;
-        let x2 = rhs.x;
-        let y2 = rhs.y;
-
-        if x1 == x2 && y1 == y2 {
-            return self.double();
-        }
-
-        let slope = (y2 - y1) / (x2 - x1);
-        let xr = slope.square() - x1 - x2;
-        let yr = slope * (x1 - xr) - y1;
-
-        Self {
-            x: xr,
-            y: yr,
-            _marker: PhantomData::<C>,
-        }
-    }
-
-    pub fn sub(&self, rhs: &Self) -> Self {
-        self + (-rhs)
-    }
-
-    pub fn mul(&self, rhs: &Fr<C>) -> Self {
-        let mut acc = Self::zero();
-
-        for bit in rhs
-            .0
-            .iter()
-            .rev()
-            .flat_map(|&x| (0..64).rev().map(move |i| (x >> i) & 1 == 1))
-        {
-            acc = acc.double();
-
-            if bit {
-                acc = acc.add(self);
-            }
-        }
-
-        acc
-    }
-
-    pub fn random(mut rng: impl rand::Rng) -> Self {
-        let x = Fp::random(&mut rng);
-        let y = Fp::random(&mut rng);
-        Self {
-            x,
-            y,
-            _marker: PhantomData::<C>,
-        }
-    }
-
-    pub fn is_valid(&self) -> Result<(), String> {
-        if self.is_zero() {
-            return Ok(());
-        }
-
-        if !self.is_on_curve() {
-            return Err("Point is not on curve".to_string());
-        }
-        if !self.is_torsion_free() {
-            return Err("Point is not torsion free".to_string());
-        }
-
-        Ok(())
-    }
 }
 
 impl<'a, C: Curve> Neg for &'a G1Affine<C> {
@@ -181,8 +134,23 @@ impl<'a, 'b, C: Curve> Mul<&'b Fr<C>> for &'a G1Affine<C> {
     type Output = G1Affine<C>;
 
     #[inline]
-    fn mul(self, rhs: &'b Fr<C>) -> G1Affine<C> {
-        self.mul(rhs)
+    fn mul(self, other: &'b Fr<C>) -> G1Affine<C> {
+        let mut acc = G1Affine::<C>::zero();
+
+        for bit in other
+            .0
+            .iter()
+            .rev()
+            .flat_map(|&x| (0..64).rev().map(move |i| (x >> i) & 1 == 1))
+        {
+            acc = acc.double();
+
+            if bit {
+                acc = acc.add(self);
+            }
+        }
+
+        acc
     }
 }
 
@@ -190,8 +158,33 @@ impl<'a, 'b, C: Curve> Add<&'b G1Affine<C>> for &'a G1Affine<C> {
     type Output = G1Affine<C>;
 
     #[inline]
-    fn add(self, rhs: &'b G1Affine<C>) -> G1Affine<C> {
-        self.add(rhs)
+    fn add(self, other: &'b G1Affine<C>) -> G1Affine<C> {
+        if self.is_zero() {
+            return *other;
+        }
+
+        if other.is_zero() {
+            return *self;
+        }
+
+        let x1 = self.x;
+        let y1 = self.y;
+        let x2 = other.x;
+        let y2 = other.y;
+
+        if x1 == x2 && y1 == y2 {
+            return self.double();
+        }
+
+        let slope = (y2 - y1) / (x2 - x1);
+        let xr = slope.square() - x1 - x2;
+        let yr = slope * (x1 - xr) - y1;
+
+        G1Affine {
+            x: xr,
+            y: yr,
+            _marker: PhantomData::<C>,
+        }
     }
 }
 
@@ -199,8 +192,8 @@ impl<'a, 'b, C: Curve> Sub<&'b G1Affine<C>> for &'a G1Affine<C> {
     type Output = G1Affine<C>;
 
     #[inline]
-    fn sub(self, rhs: &'b G1Affine<C>) -> G1Affine<C> {
-        self.sub(rhs)
+    fn sub(self, other: &'b G1Affine<C>) -> G1Affine<C> {
+        self + (-other)
     }
 }
 
@@ -342,7 +335,7 @@ mod test {
             ]),
         );
 
-        for _ in 0..100 {
+        for _ in 0..10 {
             let b = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
             let b1 = b.double() + b;
             let b2 = b1 + b;

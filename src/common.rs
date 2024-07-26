@@ -1,12 +1,44 @@
 use core::fmt::Debug;
+use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Sub, SubAssign};
+
+use crate::fr::Fr;
+
+pub(crate) trait FieldElement:
+    Add + AddAssign + Sub + SubAssign + Mul + MulAssign + Div + DivAssign + Debug + Sync + Sized
+{
+}
+
+pub(crate) trait AffinePoint<C: Curve>:
+    Add<Output = Self>
+    + AddAssign
+    + Sub<Output = Self>
+    + SubAssign
+    + Mul<Fr<C>, Output = Self>
+    + Copy
+    + Debug
+{
+    type Dtype: FieldElement;
+    fn new(x: Self::Dtype, y: Self::Dtype) -> Self;
+    fn zero() -> Self;
+    fn is_zero(&self) -> bool;
+    fn generator() -> Self;
+    fn is_valid(&self) -> Result<(), String>;
+    fn random(rng: impl rand::Rng) -> Self;
+    fn double(&self) -> Self;
+}
+
 pub trait Curve: Clone + Copy + Sync + Send + Debug {
     const B: [u64; 6];
     const X: u64;
     const MAX_BITS: u64;
     const MODULUS: [u64; 6];
     const BETA: [u64; 6];
-    const G_X: [u64; 6];
-    const G_Y: [u64; 6];
+    const G1_X: [u64; 6];
+    const G1_Y: [u64; 6];
+    const G2_X0: [u64; 6];
+    const G2_X1: [u64; 6];
+    const G2_Y0: [u64; 6];
+    const G2_Y1: [u64; 6];
     const INV: u64;
     const R: [u64; 6];
 
@@ -23,6 +55,7 @@ pub trait Curve: Clone + Copy + Sync + Send + Debug {
     const FR_ROOT_OF_UNITY_INV: [u64; 4];
     const FR_DELTA: [u64; 4];
 }
+
 // BN254 curve R-value
 // 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
 
@@ -51,7 +84,7 @@ impl Curve for Bls12381Curve {
         0x0,
     ];
 
-    const G_X: [u64; 6] = [
+    const G1_X: [u64; 6] = [
         0xfb3af00adb22c6bb,
         0x6c55e83ff97a1aef,
         0xa14e3a3f171bac58,
@@ -60,13 +93,49 @@ impl Curve for Bls12381Curve {
         0x17f1d3a73197d794,
     ];
 
-    const G_Y: [u64; 6] = [
+    const G1_Y: [u64; 6] = [
         0x0caa232946c5e7e1,
         0xd03cc744a2888ae4,
         0x00db18cb2c04b3ed,
         0xfcf5e095d5d00af6,
         0xa09e30ed741d8ae4,
         0x08b3f481e3aaa0f1,
+    ];
+
+    const G2_X0: [u64; 6] = [
+        0xd48056c8c121bdb8,
+        0x0bac0326a805bbef,
+        0xb4510b647ae3d177,
+        0xc6e47ad4fa403b02,
+        0x260805272dc51051,
+        0x024aa2b2f08f0a91,
+    ];
+
+    const G2_X1: [u64; 6] = [
+        0xe5ac7d055d042b7e,
+        0x334cf11213945d57,
+        0xb5da61bbdc7f5049,
+        0x596bd0d09920b61a,
+        0x7dacd3a088274f65,
+        0x13e02b6052719f60,
+    ];
+
+    const G2_Y0: [u64; 6] = [
+        0xe193548608b82801,
+        0x923ac9cc3baca289,
+        0x6d429a695160d12c,
+        0xadfd9baa8cbdd3a7,
+        0x8cc9cdc6da2e351a,
+        0x0ce5d527727d6e11,
+    ];
+
+    const G2_Y1: [u64; 6] = [
+        0xaaa9075ff05f79be,
+        0x3f370d275cec1da1,
+        0x267492ab572e99ab,
+        0xcb3e287e85a763af,
+        0x32acd2b02bc28b99,
+        0x0606c4a02ea734cc,
     ];
 
     /// INV = -(p^{-1} mod 2^64) mod 2^64
