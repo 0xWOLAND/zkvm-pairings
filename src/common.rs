@@ -1,7 +1,12 @@
-pub trait Curve: Clone + Copy + Sync + Send {
-    const A: [u64; 6];
+use core::fmt::Debug;
+pub trait Curve: Clone + Copy + Sync + Send + Debug {
+    const B: [u64; 6];
+    const X: u64;
     const MAX_BITS: u64;
     const MODULUS: [u64; 6];
+    const BETA: [u64; 6];
+    const G_X: [u64; 6];
+    const G_Y: [u64; 6];
     const INV: u64;
     const R: [u64; 6];
 
@@ -21,11 +26,12 @@ pub trait Curve: Clone + Copy + Sync + Send {
 // BN254 curve R-value
 // 0x30644e72e131a029b85045b68181585d2833e84879b9709143e1f593f0000001
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Bls12381Curve {}
 
 impl Curve for Bls12381Curve {
-    const A: [u64; 6] = [0; 6];
+    const B: [u64; 6] = [4, 0, 0, 0, 0, 0];
+    const X: u64 = 0xd201000000010000; // -0xd201000000010000
     const MAX_BITS: u64 = 384;
     const MODULUS: [u64; 6] = [
         0xb9fe_ffff_ffff_aaab,
@@ -34,6 +40,33 @@ impl Curve for Bls12381Curve {
         0x6477_4b84_f385_12bf,
         0x4b1b_a7b6_434b_acd7,
         0x1a01_11ea_397f_e69a,
+    ];
+    /// A nontrivial third root of unity in Fp
+    const BETA: [u64; 6] = [
+        0x2e01fffffffefffe,
+        0xde17d813620a0002,
+        0xddb3a93be6f89688,
+        0xba69c6076a0f77ea,
+        0x5f19672fdf76ce51,
+        0x0,
+    ];
+
+    const G_X: [u64; 6] = [
+        0xfb3af00adb22c6bb,
+        0x6c55e83ff97a1aef,
+        0xa14e3a3f171bac58,
+        0xc3688c4f9774b905,
+        0x2695638c4fa9ac0f,
+        0x17f1d3a73197d794,
+    ];
+
+    const G_Y: [u64; 6] = [
+        0x0caa232946c5e7e1,
+        0xd03cc744a2888ae4,
+        0x00db18cb2c04b3ed,
+        0xfcf5e095d5d00af6,
+        0xa09e30ed741d8ae4,
+        0x08b3f481e3aaa0f1,
     ];
 
     /// INV = -(p^{-1} mod 2^64) mod 2^64
