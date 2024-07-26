@@ -1,7 +1,6 @@
 use core::fmt;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use rand_core::RngCore;
-use std::marker::PhantomData;
 
 use crate::common::{Curve, FieldElement};
 use crate::fp::Fp;
@@ -13,7 +12,6 @@ pub struct Fp2<C: Curve> {
     pub c0: Fp<C>,
     /// The second component of the Fp2 element.
     pub c1: Fp<C>,
-    _marker: PhantomData<C>,
 }
 
 impl<C: Curve> fmt::Debug for Fp2<C> {
@@ -33,11 +31,7 @@ impl<C: Curve> zeroize::DefaultIsZeroes for Fp2<C> {}
 
 impl<C: Curve> From<Fp<C>> for Fp2<C> {
     fn from(f: Fp<C>) -> Fp2<C> {
-        Fp2 {
-            c0: f,
-            c1: f,
-            _marker: PhantomData::<C>,
-        }
+        Fp2 { c0: f, c1: f }
     }
 }
 
@@ -135,11 +129,7 @@ impl<C: Curve> Fp2<C> {
     }
 
     pub const fn new(c0: Fp<C>, c1: Fp<C>) -> Fp2<C> {
-        Fp2 {
-            c0,
-            c1,
-            _marker: PhantomData::<C>,
-        }
+        Fp2 { c0, c1 }
     }
 
     /// Checks if this element is zero.

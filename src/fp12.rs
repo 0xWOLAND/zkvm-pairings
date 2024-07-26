@@ -5,7 +5,6 @@ use crate::fp6::*;
 
 use core::fmt;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-use std::marker::PhantomData;
 
 #[cfg(feature = "pairings")]
 use rand_core::RngCore;
@@ -14,7 +13,6 @@ use rand_core::RngCore;
 pub struct Fp12<C: Curve> {
     pub c0: Fp6<C>,
     pub c1: Fp6<C>,
-    _marker: PhantomData<C>,
 }
 
 impl<C: Curve> From<Fp<C>> for Fp12<C> {
@@ -22,7 +20,6 @@ impl<C: Curve> From<Fp<C>> for Fp12<C> {
         Fp12 {
             c0: Fp6::<C>::from(f),
             c1: Fp6::<C>::from(f),
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -32,7 +29,6 @@ impl<C: Curve> From<Fp2<C>> for Fp12<C> {
         Fp12 {
             c0: Fp6::<C>::from(f),
             c1: Fp6::<C>::zero(),
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -42,7 +38,6 @@ impl<C: Curve> From<Fp6<C>> for Fp12<C> {
         Fp12 {
             c0: f,
             c1: Fp6::<C>::zero(),
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -80,11 +75,7 @@ impl<C: Curve> fmt::Debug for Fp12<C> {
 impl<C: Curve> Fp12<C> {
     #[inline]
     pub fn new(c0: Fp6<C>, c1: Fp6<C>) -> Self {
-        Fp12 {
-            c0,
-            c1,
-            _marker: PhantomData::<C>,
-        }
+        Fp12 { c0, c1 }
     }
 
     #[inline]
