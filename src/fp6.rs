@@ -4,7 +4,6 @@ use crate::fp2::*;
 
 use core::fmt;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-use std::marker::PhantomData;
 
 use rand::RngCore;
 #[cfg(feature = "pairings")]
@@ -15,7 +14,6 @@ pub struct Fp6<C: Curve> {
     pub c0: Fp2<C>,
     pub c1: Fp2<C>,
     pub c2: Fp2<C>,
-    _marker: PhantomData<C>,
 }
 
 impl<C: Curve> From<Fp<C>> for Fp6<C> {
@@ -24,7 +22,6 @@ impl<C: Curve> From<Fp<C>> for Fp6<C> {
             c0: Fp2::from(f),
             c1: Fp2::from(f),
             c2: Fp2::from(f),
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -35,7 +32,6 @@ impl<C: Curve> From<Fp2<C>> for Fp6<C> {
             c0: f,
             c1: Fp2::zero(),
             c2: Fp2::zero(),
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -74,12 +70,7 @@ impl<C: Curve> Eq for Fp6<C> {}
 impl<C: Curve> Fp6<C> {
     #[inline]
     pub fn new(c0: Fp2<C>, c1: Fp2<C>, c2: Fp2<C>) -> Self {
-        Fp6 {
-            c0,
-            c1,
-            c2,
-            _marker: PhantomData::<C>,
-        }
+        Fp6 { c0, c1, c2 }
     }
 
     #[inline]
@@ -88,7 +79,6 @@ impl<C: Curve> Fp6<C> {
             c0: Fp2::zero(),
             c1: Fp2::zero(),
             c2: Fp2::zero(),
-            _marker: PhantomData::<C>,
         }
     }
 
@@ -98,7 +88,6 @@ impl<C: Curve> Fp6<C> {
             c0: Fp2::one(),
             c1: Fp2::zero(),
             c2: Fp2::zero(),
-            _marker: PhantomData::<C>,
         }
     }
 
@@ -107,7 +96,6 @@ impl<C: Curve> Fp6<C> {
             c0: Fp2::random(&mut rng),
             c1: Fp2::random(&mut rng),
             c2: Fp2::random(&mut rng),
-            _marker: PhantomData::<C>,
         }
     }
 
@@ -116,7 +104,6 @@ impl<C: Curve> Fp6<C> {
             c0: (self.c2 * c1).mul_by_nonresidue(),
             c1: self.c0 * c1,
             c2: self.c1 * c1,
-            _marker: PhantomData::<C>,
         }
     }
 
@@ -134,7 +121,6 @@ impl<C: Curve> Fp6<C> {
             c0: t1,
             c1: t2,
             c2: t3,
-            _marker: PhantomData::<C>,
         }
     }
 
@@ -149,7 +135,6 @@ impl<C: Curve> Fp6<C> {
             c0: self.c2.mul_by_nonresidue(),
             c1: self.c0,
             c2: self.c1,
-            _marker: PhantomData::<C>,
         }
     }
     /// Raises this element to p.
@@ -187,12 +172,7 @@ impl<C: Curve> Fp6<C> {
                 Fp::zero(),
             );
 
-        Fp6 {
-            c0,
-            c1,
-            c2,
-            _marker: PhantomData::<C>,
-        }
+        Fp6 { c0, c1, c2 }
     }
 
     #[inline(always)]
@@ -283,7 +263,6 @@ impl<C: Curve> Fp6<C> {
                     + self.c2.c0 * b.c0.c1
                     + self.c2.c1 * b.c0.c0,
             ),
-            _marker: PhantomData::<C>,
         }
     }
 
@@ -305,7 +284,6 @@ impl<C: Curve> Fp6<C> {
             c0: s3.mul_by_nonresidue() + s0,
             c1: s4.mul_by_nonresidue() + s1,
             c2: s1 + s2 + s3 - s0 - s4,
-            _marker: PhantomData::<C>,
         }
     }
 
@@ -327,7 +305,6 @@ impl<C: Curve> Fp6<C> {
             c0: t * c0,
             c1: t * c1,
             c2: t * c2,
-            _marker: PhantomData::<C>,
         })
     }
 }
@@ -350,7 +327,6 @@ impl<'a, 'b, C: Curve> Add<&'b Fp6<C>> for &'a Fp6<C> {
             c0: self.c0 + rhs.c0,
             c1: self.c1 + rhs.c1,
             c2: self.c2 + rhs.c2,
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -364,7 +340,6 @@ impl<'a, C: Curve> Neg for &'a Fp6<C> {
             c0: -self.c0,
             c1: -self.c1,
             c2: -self.c2,
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -387,7 +362,6 @@ impl<'a, 'b, C: Curve> Sub<&'b Fp6<C>> for &'a Fp6<C> {
             c0: self.c0 - rhs.c0,
             c1: self.c1 - rhs.c1,
             c2: self.c2 - rhs.c2,
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -401,7 +375,6 @@ impl<'a, 'b, C: Curve> Mul<&'b Fp<C>> for &'a Fp6<C> {
             c0: self.c0 * rhs,
             c1: self.c1 * rhs,
             c2: self.c2 * rhs,
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -433,7 +406,6 @@ mod test {
             c0: Fp2::random(&mut thread_rng()),
             c1: Fp2::random(&mut thread_rng()),
             c2: Fp2::random(&mut thread_rng()),
-            _marker: PhantomData::<Bls12381Curve>,
         }
     }
 

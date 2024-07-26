@@ -1,7 +1,4 @@
-use std::marker::PhantomData;
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-
-use rand::distributions::Alphanumeric;
 
 use crate::common::{AffinePoint, Curve};
 use crate::{fp::Fp, fr::Fr};
@@ -11,7 +8,6 @@ pub struct G1Affine<C: Curve> {
     x: Fp<C>,
     y: Fp<C>,
     is_infinity: bool,
-    _marker: PhantomData<C>,
 }
 
 impl<C: Curve> PartialEq for G1Affine<C> {
@@ -24,19 +20,13 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
     type Dtype = Fp<C>;
 
     fn new(x: Self::Dtype, y: Self::Dtype, is_infinity: bool) -> Self {
-        G1Affine {
-            x,
-            y,
-            is_infinity,
-            _marker: PhantomData::<C>,
-        }
+        G1Affine { x, y, is_infinity }
     }
     fn identity() -> Self {
         G1Affine {
             x: Fp::zero(),
             y: Fp::one(),
             is_infinity: true,
-            _marker: PhantomData::<C>,
         }
     }
 
@@ -53,7 +43,6 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
             x: Fp::from_raw_unchecked(C::G1_X),
             y: Fp::from_raw_unchecked(C::G1_Y),
             is_infinity: false,
-            _marker: PhantomData::<C>,
         }
     }
 
@@ -79,7 +68,6 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
             x,
             y,
             is_infinity: false,
-            _marker: PhantomData::<C>,
         }
     }
 
@@ -99,7 +87,6 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
             x: xr,
             y: yr,
             is_infinity: false,
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -136,7 +123,6 @@ impl<'a, C: Curve> Neg for &'a G1Affine<C> {
             x: self.x,
             y: -self.y,
             is_infinity: self.is_infinity,
-            _marker: PhantomData::<C>,
         }
     }
 }
@@ -196,7 +182,6 @@ impl<'a, 'b, C: Curve> Add<&'b G1Affine<C>> for &'a G1Affine<C> {
             x: xr,
             y: yr,
             is_infinity: false,
-            _marker: PhantomData::<C>,
         }
     }
 }
