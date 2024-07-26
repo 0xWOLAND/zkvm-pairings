@@ -18,8 +18,8 @@ pub(crate) trait AffinePoint<C: Curve>:
     + Debug
 {
     type Dtype: FieldElement;
-    fn new(x: Self::Dtype, y: Self::Dtype) -> Self;
-    fn zero() -> Self;
+    fn new(x: Self::Dtype, y: Self::Dtype, is_infinity: bool) -> Self;
+    fn identity() -> Self;
     fn is_zero(&self) -> bool;
     fn generator() -> Self;
     fn is_valid(&self) -> Result<(), String>;
@@ -29,6 +29,8 @@ pub(crate) trait AffinePoint<C: Curve>:
 
 pub trait Curve: Clone + Copy + Sync + Send + Debug {
     const B: [u64; 6];
+    const B2_X: [u64; 6];
+    const B2_Y: [u64; 6];
     const X: u64;
     const MAX_BITS: u64;
     const MODULUS: [u64; 6];
@@ -64,6 +66,8 @@ pub struct Bls12381Curve {}
 
 impl Curve for Bls12381Curve {
     const B: [u64; 6] = [4, 0, 0, 0, 0, 0];
+    const B2_X: [u64; 6] = [4, 0, 0, 0, 0, 0];
+    const B2_Y: [u64; 6] = [4, 0, 0, 0, 0, 0];
     const X: u64 = 0xd201000000010000; // -0xd201000000010000
     const MAX_BITS: u64 = 384;
     const MODULUS: [u64; 6] = [

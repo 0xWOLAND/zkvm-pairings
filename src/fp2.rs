@@ -3,7 +3,7 @@ use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAss
 use rand_core::RngCore;
 use std::marker::PhantomData;
 
-use crate::common::Curve;
+use crate::common::{Curve, FieldElement};
 use crate::fp::Fp;
 
 #[derive(Copy, Clone)]
@@ -35,7 +35,7 @@ impl<C: Curve> From<Fp<C>> for Fp2<C> {
     fn from(f: Fp<C>) -> Fp2<C> {
         Fp2 {
             c0: f,
-            c1: Fp::zero(),
+            c1: f,
             _marker: PhantomData::<C>,
         }
     }
@@ -336,6 +336,8 @@ impl<C: Curve> Fp2<C> {
         res
     }
 }
+
+impl<C: Curve> FieldElement for Fp2<C> {} // For `AffinePoint` trait
 
 #[cfg(test)]
 mod test {

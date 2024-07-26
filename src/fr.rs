@@ -960,7 +960,7 @@ mod test {
         }
 
         let mut none_count = 0;
-        for i in 0..10 {
+        for i in 0..100 {
             let square = Fr::<Bls12381Curve>::from_u128(i);
             let square_root = square.sqrt();
             if bool::from(square_root.is_none()) {
