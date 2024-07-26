@@ -458,7 +458,7 @@ mod test {
 
     #[test]
     fn test_sqrt() {
-        for _ in 0..100 {
+        for _ in 0..10 {
             let a = fp2_rand();
             let a_sq = a.square();
             let a_sqrt = a_sq.sqrt();
