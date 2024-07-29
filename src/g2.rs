@@ -6,8 +6,8 @@ use crate::{fp2::Fp2, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
 pub struct G2Affine<C: Curve> {
-    x: Fp2<C>,
-    y: Fp2<C>,
+    pub(crate) x: Fp2<C>,
+    pub(crate) y: Fp2<C>,
     is_infinity: bool,
 }
 
@@ -457,5 +457,19 @@ mod test {
         );
         assert!(!a.is_torsion_free());
         assert!(G2Affine::<Bls12381Curve>::generator().is_torsion_free());
+    }
+
+    #[test]
+    fn test_double_and_add_arithmetic() {
+        let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        let q = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        let r = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+
+        let double_p_add_q = p.double() + q;
+        let p_plus_q_plus_p = (p + q) + p;
+
+        assert_eq!(p + q, q + p);
+        assert_eq!((p + q) + r, p + (q + r));
+        assert_eq!(double_p_add_q, p_plus_q_plus_p);
     }
 }
