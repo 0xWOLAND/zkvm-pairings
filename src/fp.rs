@@ -277,7 +277,7 @@ impl<C: Curve> Fp<C> {
 
     #[inline]
     /// Computes the square root of this field element.
-    pub fn sqrt(&self) -> Result<Self, ()> {
+    pub fn sqrt(&self) -> Option<Self> {
         // We use Shank's method, as p = 3 (mod 4). This means
         // we only need to exponentiate by (p+1)/4. This only
         // works for elements that are actually quadratic residue,
@@ -292,11 +292,7 @@ impl<C: Curve> Fp<C> {
             0x0680_447a_8e5f_f9a6,
         ]);
 
-        if sqrt.square() == *self {
-            return Ok(sqrt);
-        } else {
-            return Err(());
-        }
+        Some(sqrt).filter(|s| s.square() == *self)
     }
 
     #[inline]
@@ -583,7 +579,7 @@ mod test {
         assert!(
             Fp::<Bls12381Curve>::from_raw_unchecked([72057594037927816, 0, 0, 0, 0, 0])
                 .sqrt()
-                .is_err()
+                .is_none()
         );
     }
 

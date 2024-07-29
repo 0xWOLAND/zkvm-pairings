@@ -69,12 +69,29 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
     }
 
     fn random(mut rng: impl rand::Rng) -> Self {
-        let x = Fp2::random(&mut rng);
-        let y = Fp2::random(&mut rng);
-        Self {
-            x,
-            y,
-            is_infinity: false,
+        let b = Fp2 {
+            c0: Fp::from_raw_unchecked(C::B2_X),
+            c1: Fp::from_raw_unchecked(C::B2_Y),
+        };
+        loop {
+            let x = Fp2::random(&mut rng);
+            let flip_sign = rng.next_u32() % 2 != 0;
+
+            // Obtain the corresponding y-coordinate given x as y = sqrt(x^3 + 4)
+            let p = ((x.square() * x) + b).sqrt().map(|y| G2Affine {
+                x,
+                y: if flip_sign { -y } else { y },
+                is_infinity: false,
+            });
+
+            if p.is_some().into() {
+                // let p = p.unwrap().to_curve().clear_cofactor();
+                let p = p.unwrap();
+
+                if bool::from(!p.is_identity()) {
+                    return p;
+                }
+            }
         }
     }
 

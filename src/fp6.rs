@@ -529,7 +529,7 @@ mod test {
         assert!(
             Fp::<Bls12381Curve>::from_raw_unchecked([72057594037927816, 0, 0, 0, 0, 0])
                 .sqrt()
-                .is_err()
+                .is_none()
         );
     }
 
