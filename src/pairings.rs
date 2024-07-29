@@ -87,33 +87,41 @@ pub(crate) fn double_and_add_step<C: Curve>(
 pub(crate) fn triple_step<C: Curve>(
     p1: G2Affine<C>,
 ) -> (G2Affine<C>, LineEvaluation<C>, LineEvaluation<C>) {
+    // λ1 = 3x²/2y
     let n = p1.x.square();
     let three = Fp::<C>::from(3);
     let n = n * three;
     let d = p1.y + p1.y;
     let l1 = n / d;
 
+    // compute line1
     let line1 = LineEvaluation {
         x: l1,
-        y: (l1 * p1.x) - p1.y,
+        y: l1 * p1.x - p1.y,
     };
 
-    let x2 = (l1 + l1) - (p1.x + p1.x);
+    // x2 = λ1² - 2x
+    let x2 = l1.square() - (p1.x + p1.x);
+
+    // compute λ2 = 2y / (x2 - x) - λ1
     let x1x2 = p1.x - x2;
     let l2 = (d / x1x2) - l1;
 
+    // compute line2
     let line2 = LineEvaluation {
         x: l2,
-        y: (l2 * p1.x) - p1.y,
+        y: l2 * p1.x - p1.y,
     };
 
-    let l1l2 = l1 * l2;
-    let xr = l1l2 - x2 + p1.x;
+    // xr = λ2² - x2 - x
+    let l2_square = l2.square();
+    let x_r = l2_square - (x2 + p1.x);
 
-    let pxrx = p1.x - xr;
-    let yr = (l2 * pxrx) - p1.y;
+    // yr = λ2 * (x - xr) - y
+    let pxrx = p1.x - x_r;
+    let y_r = (l2 * pxrx) - p1.y;
 
-    let out = G2Affine::<C>::new(xr, yr, false);
+    let out = G2Affine::<C>::new(x_r, y_r, false);
 
     (out, line1, line2)
 }
@@ -157,16 +165,22 @@ mod test {
         let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
         let q = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
 
-        // let (p1, l1, ll1) = double_and_add_step(p, q);
-        // let (_p2, l2) = double_step(p);
-        // let (p2, ll2) = add_step(_p2, q);
+        let (p1, l1, ll1) = double_and_add_step(p, q);
+        let (_p2, l2) = double_step(p);
+        let (p2, ll2) = add_step(_p2, q);
 
-        // assert_eq!(p1, p2);
-        assert_eq!(
-            add_step(double_step(p).0, q).0,
-            add_step(add_step(p, q).0, p).0
-        );
+        assert_eq!(p1, p2);
+    }
 
-        assert_eq!(add_step(double_step(p).0, q).0, double_and_add_step(p, q).0)
+    #[test]
+    fn test_triple_step() {
+        let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+
+        let (p1, l1, l2) = triple_step(p);
+        // let (_p2, ll1) = double_step(p);
+        // let (p2, ll2) = add_step(_p2, p);
+        let p2 = p + p + p;
+
+        assert_eq!(p1, p2);
     }
 }
