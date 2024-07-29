@@ -66,38 +66,21 @@ pub(crate) fn double_and_add_step<C: Curve>(
     p1: G2Affine<C>,
     p2: G2Affine<C>,
 ) -> (G2Affine<C>, LineEvaluation<C>, LineEvaluation<C>) {
-    let n = p2.y - p1.y;
-    let d = p2.x - p1.x;
-    let l = n / d;
-
-    let ll = l.square();
-    let x_r = ll - (p1.x + p2.x);
-
-    let y_r = l * (p1.x - x_r) - p1.y;
-
+    let l1 = (p1.y - p2.y) / (p1.x - p2.x);
     let line1 = LineEvaluation {
-        x: l,
-        y: (l * p1.x) - p1.y,
+        x: l1,
+        y: (l1 * p1.x) - p1.y,
     };
-
-    let p2 = G2Affine::<C>::new(x_r, y_r, false);
-
-    let n = p2.y - p1.y;
-    let d = p2.x - p1.x;
-    let l = n / d;
-
-    let ll = l.square();
-    let x_r = ll - (p1.x + p2.x);
-
-    let y_r = l * (p1.x - x_r) - p1.y;
-
+    let xspq = l1.square() - p1.x - p2.x;
+    let l2 = -l1 - (p1.y + p1.y) / (xspq - p1.x);
     let line2 = LineEvaluation {
-        x: l,
-        y: (l * p1.x) - p1.y,
+        x: l2,
+        y: (l2 * p1.x) - p1.y,
     };
+    let xr = l2.square() - p1.x - xspq;
+    let yr = l2 * (p1.x - xr) - p1.y;
 
-    let out = G2Affine::<C>::new(x_r, y_r, false);
-
+    let out = G2Affine::<C>::new(xr, yr, false);
     (out, line1, line2)
 }
 
