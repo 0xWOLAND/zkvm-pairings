@@ -225,12 +225,33 @@ fn miller_loop_lines<C: Curve>(p: &[G1Affine<C>], lines: &[LineEvaluations<C>]) 
     res
 }
 
-pub(crate) fn miller_loop<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> Fp12<C> {
+fn miller_loop<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> Fp12<C> {
     assert_eq!(p.len(), q.len(), "Input slices must have the same length");
     assert!(p.len() > 0, "Cannot perform pairing on empty slices");
 
     let lines: Vec<LineEvaluations<C>> = q.iter().map(|q| compute_lines(q)).collect();
     miller_loop_lines(p, lines.as_slice())
+}
+
+fn residue_test<C: Curve>(x: &Fp12<C>) -> bool {
+    let scaling_factor = Fp12::one(); // TODO
+
+    let t0 = x.frobenius_map();
+    let t1 = x.powt();
+
+    let lhs = t0 * t1;
+    let rhs = x * scaling_factor;
+
+    lhs == rhs
+}
+
+fn verify_pairing<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> bool {
+    let f = miller_loop(p, q);
+
+    let buf = f.conjugate() / f;
+    let f = buf.frobenius_map() * buf;
+
+    residue_test(&f)
 }
 
 #[cfg(test)]
