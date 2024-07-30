@@ -356,65 +356,68 @@ pub(crate) fn get_root_and_scaling_factor_bls(
     Ok((root, w_full))
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use crate::fr::Fr;
+#[cfg(test)]
+mod tests {
+    use crate::fr::Fr;
 
-//     use super::*;
-//     // use crate::{fast_pairings::miller_loop, multi_miller_loop, G2Affine, Scalar};
+    use super::*;
+    // use crate::{fast_pairings::miller_loop, multi_miller_loop, G2Affine, Scalar};
 
-//     // r
-//     const BLS_R: [u64; 5] = [
-//         0x0005243587517512,
-//         0x6190479447740508,
-//         0x1859658376905525,
-//         0x0052763782260365,
-//         0x8699938581184513,
-//     ];
+    // r
+    const BLS_R: [u64; 5] = [
+        0x0005243587517512,
+        0x6190479447740508,
+        0x1859658376905525,
+        0x0052763782260365,
+        0x8699938581184513,
+    ];
 
-//     #[test]
-//     fn test_r_residue_test() {
-//         // let a1 = G1Affine::identity();
-//         // let b1 = G2Affine::generator();
+    #[test]
+    fn test_witness() {}
 
-//         let a2 = G1Affine::from(
-//             G1Affine::generator() * Scalar::from_raw([1, 2, 3, 4]).invert().unwrap().square(),
-//         );
-//         let b2 = G2Affine::from(
-//             G2Affine::generator() * Scalar::from_raw([4, 2, 2, 4]).invert().unwrap().square(),
-//         );
+    // #[test]
+    // fn test_r_residue_test() {
+    //     // let a1 = G1Affine::identity();
+    //     // let b1 = G2Affine::generator();
 
-//         // let a3 = G1Affine::identity();
-//         // let b3 = G2Affine::from(
-//         //     G2Affine::generator() * Scalar::from_raw([9, 2, 2, 4]).invert().unwrap().square(),
-//         // );
+    //     let a2 = G1Affine::from(
+    //         G1Affine::generator() * Scalar::from_raw([1, 2, 3, 4]).invert().unwrap().square(),
+    //     );
+    //     let b2 = G2Affine::from(
+    //         G2Affine::generator() * Scalar::from_raw([4, 2, 2, 4]).invert().unwrap().square(),
+    //     );
 
-//         // let a4 = G1Affine::from(
-//         //     G1Affine::generator() * Scalar::from_raw([5, 5, 5, 5]).invert().unwrap().square(),
-//         // );
-//         // let b4 = G2Affine::identity();
+    //     // let a3 = G1Affine::identity();
+    //     // let b3 = G2Affine::from(
+    //     //     G2Affine::generator() * Scalar::from_raw([9, 2, 2, 4]).invert().unwrap().square(),
+    //     // );
 
-//         let a5 = G1Affine::from(
-//             G1Affine::<Bls12381Curve>::generator()
-//                 * Fr::from_raw([323, 32, 3, 1]).invert().unwrap().square(),
-//         );
-//         let b5 = G2Affine::from(
-//             G2Affine::<Bls12381Curve>::generator()
-//                 * Fr::from_raw([4, 2, 2, 9099]).invert().unwrap().square(),
-//         );
+    //     // let a4 = G1Affine::from(
+    //     //     G1Affine::generator() * Scalar::from_raw([5, 5, 5, 5]).invert().unwrap().square(),
+    //     // );
+    //     // let b4 = G2Affine::identity();
 
-//         // let a = [a1, a2, a3, a5];
-//         // let b = [b1, b2, b3, b5];
-//         let a = [a2, a5];
-//         let b = [b2, b5];
+    //     let a5 = G1Affine::from(
+    //         G1Affine::<Bls12381Curve>::generator()
+    //             * Fr::from_raw([323, 32, 3, 1]).invert().unwrap().square(),
+    //     );
+    //     let b5 = G2Affine::from(
+    //         G2Affine::<Bls12381Curve>::generator()
+    //             * Fr::from_raw([4, 2, 2, 9099]).invert().unwrap().square(),
+    //     );
 
-//         for (a, b) in a.iter().zip(b.iter()) {
-//             // let x = multi_miller_loop(&[(a, &b.into())]).0;
-//             let x = miller_loop(a, b);
-//             let x_r = x.pow_vartime_extended(&BLS_R);
-//             let (root, w_full) = get_root_and_scaling_factor_bls(x_r).unwrap();
+    //     // let a = [a1, a2, a3, a5];
+    //     // let b = [b1, b2, b3, b5];
+    //     let a = [a2, a5];
+    //     let b = [b2, b5];
 
-//             assert_eq!(root.pow_vartime_extended(&BLS_LAMBDA), x * w_full);
-//         }
-//     }
-// }
+    //     for (a, b) in a.iter().zip(b.iter()) {
+    //         // let x = multi_miller_loop(&[(a, &b.into())]).0;
+    //         let x = miller_loop(a, b);
+    //         let x_r = x.pow_vartime_extended(&BLS_R);
+    //         let (root, w_full) = get_root_and_scaling_factor_bls(x_r).unwrap();
+
+    //         assert_eq!(root.pow_vartime_extended(&BLS_LAMBDA), x * w_full);
+    //     }
+    // }
+}

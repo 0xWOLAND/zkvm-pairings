@@ -10,5 +10,7 @@ pub mod g1;
 pub mod g2;
 
 pub mod pairings;
+pub(crate) mod precompute;
+pub(crate) mod witness;
 
 pub mod common;

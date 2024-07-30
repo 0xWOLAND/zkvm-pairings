@@ -6,6 +6,7 @@ use crate::fp6::*;
 use core::fmt;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
+use rand::RngCore;
 #[cfg(feature = "pairings")]
 use rand_core::RngCore;
 
@@ -88,7 +89,6 @@ impl<C: Curve> Fp12<C> {
         Fp12::new(Fp6::one(), Fp6::zero())
     }
 
-    #[cfg(feature = "pairings")]
     pub(crate) fn random(mut rng: impl RngCore) -> Self {
         Fp12 {
             c0: Fp6::<C>::random(&mut rng),
@@ -96,18 +96,31 @@ impl<C: Curve> Fp12<C> {
         }
     }
 
-    pub fn mul_by_014(&self, c0: &Fp2<C>, c1: &Fp2<C>, c4: &Fp2<C>) -> Fp12<C> {
-        let aa = self.c0.mul_by_01(c0, c1);
-        let bb = self.c1.mul_by_1(c4);
-        let o = c1 + c4;
-        let c1 = self.c1 + self.c0;
-        let c1 = c1.mul_by_01(c0, &o);
-        let c1 = c1 - aa - bb;
-        let c0 = bb;
-        let c0 = c0.mul_by_nonresidue();
-        let c0 = c0 + aa;
+    pub fn mul_by_014(&self, c0: &Fp2<C>, c1: &Fp2<C>) -> Fp12<C> {
+        let a = self.c0.mul_by_01(c0, c1);
+        let b = Fp6::new(self.c1.c2.mul_by_nonresidue(), self.c1.c1, self.c1.c0);
+        let d = c1 + Fp2::one();
+
+        let c1 = (self.c1 + self.c0).mul_by_01(c0, &d);
+        let c1 = c1 - a - b;
+        let c0 = a + b.mul_by_nonresidue();
 
         Fp12::new(c0, c1)
+    }
+
+    pub fn mul_14_by_14(d0: &Fp2<C>, d1: &Fp2<C>, c0: &Fp2<C>, c1: &Fp2<C>) -> [Fp2<C>; 5] {
+        let x0 = d0 * c0;
+        let x1 = d1 * c1;
+        let x04 = c0 + d0;
+        let tmp = c0 + c1;
+        let x01 = d0 + d1;
+        let x01 = x01 * tmp;
+        let tmp = x1 + x0;
+        let x01 = x01 - tmp;
+        let x14 = c1 + d1;
+        let z_c0_b0 = Fp2::<C>::non_residue() + x0;
+
+        [z_c0_b0, x01, x1, x04, x14]
     }
 
     pub fn div(&self, rhs: &Fp12<C>) -> Fp12<C> {
@@ -125,6 +138,20 @@ impl<C: Curve> Fp12<C> {
     }
 
     pub fn pow_vartime(&self, by: &[u64; 6]) -> Self {
+        let mut res = Self::one();
+        for e in by.iter().rev() {
+            for i in (0..64).rev() {
+                res = res.square();
+
+                if ((*e >> i) & 1) == 1 {
+                    res *= self;
+                }
+            }
+        }
+        res
+    }
+
+    pub fn pow_vartime_extended(&self, by: &[u64]) -> Self {
         let mut res = Self::one();
         for e in by.iter().rev() {
             for i in (0..64).rev() {

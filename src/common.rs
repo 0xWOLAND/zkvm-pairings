@@ -57,6 +57,8 @@ pub trait Curve: Clone + Copy + Sync + Send + Debug {
     const FR_ROOT_OF_UNITY: [u64; 4];
     const FR_ROOT_OF_UNITY_INV: [u64; 4];
     const FR_DELTA: [u64; 4];
+
+    const LOOP_COUNTER: &'static [u64];
 }
 
 // BN254 curve R-value
@@ -242,5 +244,11 @@ impl Curve for Bls12381Curve {
         0xf6502437c6a09c00,
         0x43cab354fabb0062,
         0x8634d0aa021aaf8,
+    ];
+
+    const LOOP_COUNTER: &'static [u64] = &[
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0,
+        1, 0, 1, 1,
     ];
 }

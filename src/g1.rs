@@ -5,8 +5,8 @@ use crate::{fp::Fp, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
 pub struct G1Affine<C: Curve> {
-    x: Fp<C>,
-    y: Fp<C>,
+    pub(crate) x: Fp<C>,
+    pub(crate) y: Fp<C>,
     is_infinity: bool,
 }
 
