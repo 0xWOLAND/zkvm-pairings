@@ -197,6 +197,11 @@ impl<C: Curve> Fp12<C> {
     }
 
     #[inline(always)]
+    pub fn is_one(&self) -> bool {
+        self.c0.is_one() && self.c1.is_zero()
+    }
+
+    #[inline(always)]
     pub fn conjugate(&self) -> Self {
         Fp12::new(self.c0, -self.c1)
     }
@@ -911,6 +916,18 @@ mod test {
                     .cyclotomic_square(),
                 a.n_cyclotomic_square(4)
             );
+        }
+    }
+
+    #[test]
+    fn test_pow_vartime() {
+        for _ in 0..10 {
+            let a = fp12_rand();
+            let exp = (0..6).map(|_| rand::random::<u64>()).collect::<Vec<_>>();
+            let lhs = a.pow_vartime(&exp.clone().try_into().unwrap());
+            let rhs = a.pow_vartime_extended(exp.as_slice());
+
+            assert_eq!(lhs, rhs);
         }
     }
 }

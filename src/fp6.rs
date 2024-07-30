@@ -180,6 +180,11 @@ impl<C: Curve> Fp6<C> {
         self.c0.is_zero() & self.c1.is_zero() & self.c2.is_zero()
     }
 
+    #[inline(always)]
+    pub fn is_one(&self) -> bool {
+        self.c0.is_one() & self.c1.is_zero() & self.c2.is_zero()
+    }
+
     /// Returns `c = self * b`.
     ///
     /// Implements the full-tower interleaving strategy from

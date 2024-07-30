@@ -160,6 +160,10 @@ impl<C: Curve> Fp<C> {
         self.0.iter().all(|&e| e == 0)
     }
 
+    pub fn is_one(&self) -> bool {
+        self == &Fp::one()
+    }
+
     /// Attempts to convert a big-endian byte representation of
     /// a scalar into an `Fp`, failing if the input is not canonical.
     pub fn from_bytes(bytes: &[u8; 48]) -> Result<Fp<C>, ()> {
