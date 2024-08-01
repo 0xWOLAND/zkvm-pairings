@@ -180,6 +180,11 @@ impl<C: Curve> Fp6<C> {
         self.c0.is_zero() & self.c1.is_zero() & self.c2.is_zero()
     }
 
+    #[inline(always)]
+    pub fn is_one(&self) -> bool {
+        self.c0.is_one() & self.c1.is_zero() & self.c2.is_zero()
+    }
+
     /// Returns `c = self * b`.
     ///
     /// Implements the full-tower interleaving strategy from
@@ -529,7 +534,7 @@ mod test {
         assert!(
             Fp::<Bls12381Curve>::from_raw_unchecked([72057594037927816, 0, 0, 0, 0, 0])
                 .sqrt()
-                .is_err()
+                .is_none()
         );
     }
 

@@ -744,8 +744,8 @@ dependencies = [
 
 [[package]]
 name = "sp1-derive"
-version = "1.0.1"
-source = "git+https://github.com/succinctlabs/sp1#dd032eb23949828d244d1ad1f1569aa78155837c"
+version = "0.0.2-test"
+source = "git+https://github.com/succinctlabs/sp1?branch=bhargav/fp-precompile#476dc3c2eff57d8de06463c109debf825ce4b3cb"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -754,8 +754,8 @@ dependencies = [
 
 [[package]]
 name = "sp1-lib"
-version = "1.0.1"
-source = "git+https://github.com/succinctlabs/sp1#dd032eb23949828d244d1ad1f1569aa78155837c"
+version = "0.0.2-test"
+source = "git+https://github.com/succinctlabs/sp1?branch=bhargav/fp-precompile#476dc3c2eff57d8de06463c109debf825ce4b3cb"
 dependencies = [
  "anyhow",
  "bincode",
@@ -765,8 +765,8 @@ dependencies = [
 
 [[package]]
 name = "sp1-zkvm"
-version = "1.0.1"
-source = "git+https://github.com/succinctlabs/sp1#dd032eb23949828d244d1ad1f1569aa78155837c"
+version = "0.0.2-test"
+source = "git+https://github.com/succinctlabs/sp1?branch=bhargav/fp-precompile#476dc3c2eff57d8de06463c109debf825ce4b3cb"
 dependencies = [
  "bincode",
  "cfg-if",

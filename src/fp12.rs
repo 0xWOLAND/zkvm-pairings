@@ -6,6 +6,7 @@ use crate::fp6::*;
 use core::fmt;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
+use rand::RngCore;
 #[cfg(feature = "pairings")]
 use rand_core::RngCore;
 
@@ -88,7 +89,6 @@ impl<C: Curve> Fp12<C> {
         Fp12::new(Fp6::one(), Fp6::zero())
     }
 
-    #[cfg(feature = "pairings")]
     pub(crate) fn random(mut rng: impl RngCore) -> Self {
         Fp12 {
             c0: Fp6::<C>::random(&mut rng),
@@ -96,18 +96,95 @@ impl<C: Curve> Fp12<C> {
         }
     }
 
-    pub fn mul_by_014(&self, c0: &Fp2<C>, c1: &Fp2<C>, c4: &Fp2<C>) -> Fp12<C> {
-        let aa = self.c0.mul_by_01(c0, c1);
-        let bb = self.c1.mul_by_1(c4);
-        let o = c1 + c4;
-        let c1 = self.c1 + self.c0;
-        let c1 = c1.mul_by_01(c0, &o);
-        let c1 = c1 - aa - bb;
-        let c0 = bb;
-        let c0 = c0.mul_by_nonresidue();
-        let c0 = c0 + aa;
+    pub fn mul_by_014(&self, c0: &Fp2<C>, c1: &Fp2<C>) -> Fp12<C> {
+        let a = self.c0.mul_by_01(c0, c1);
+        let b = Fp6::new(self.c1.c2.mul_by_nonresidue(), self.c1.c1, self.c1.c0);
+        let d = c1 + Fp2::one();
+
+        let c1 = (self.c1 + self.c0).mul_by_01(c0, &d);
+        let c1 = c1 - a - b;
+        let c0 = a + b.mul_by_nonresidue();
 
         Fp12::new(c0, c1)
+    }
+
+    pub(crate) fn mul_14_by_14(d0: &Fp2<C>, d1: &Fp2<C>, c0: &Fp2<C>, c1: &Fp2<C>) -> [Fp2<C>; 5] {
+        let x0 = d0 * c0;
+        let x1 = d1 * c1;
+        let x04 = c0 + d0;
+        let tmp = c0 + c1;
+        let x01 = d0 + d1;
+        let x01 = x01 * tmp;
+        let tmp = x1 + x0;
+        let x01 = x01 - tmp;
+        let x14 = c1 + d1;
+        let z_c0_b0 = Fp2::<C>::non_residue() + x0;
+
+        [z_c0_b0, x01, x1, x04, x14]
+    }
+
+    fn cyclotomic_square(&self) -> Fp12<C> {
+        let t0 = &self.c1.c1.square();
+        let t1 = &self.c0.c0.square();
+        let t6 = (&self.c1.c1 + &self.c0.c0).square();
+        let t6 = t6 - t0;
+        let t6 = t6 - t1;
+        let t2 = &self.c0.c2.square();
+        let t3 = &self.c1.c0.square();
+        let t7 = (&self.c0.c2 + &self.c1.c0).square();
+        let t7 = t7 - t2;
+        let t7 = t7 - t3;
+        let t4 = &self.c1.c2.square();
+        let t5 = &self.c0.c1.square();
+        let t8 = (&self.c1.c2 + &self.c0.c1).square();
+        let t8 = t8 - t4;
+        let t8 = t8 - t5;
+        let t8 = t8.mul_by_nonresidue();
+        let t0 = t0.mul_by_nonresidue();
+        let t0 = t0 + t1;
+        let t2 = t2.mul_by_nonresidue();
+        let t2 = t2 + t3;
+        let t4 = t4.mul_by_nonresidue();
+        let t4 = t4 + t5;
+        let z00 = t0 - &self.c0.c0;
+        let z00 = z00 + z00;
+        let z00 = z00 + t0;
+        let z01 = t2 - &self.c0.c1;
+        let z01 = z01 + z01;
+        let z01 = z01 + t2;
+        let z02 = t4 - &self.c0.c2;
+        let z02 = z02 + z02;
+        let z02 = z02 + t4;
+        let z10 = t8 + &self.c1.c0;
+        let z10 = z10 + z10;
+        let z10 = z10 + t8;
+        let z11 = t6 + &self.c1.c1;
+        let z11 = z11 + z11;
+        let z11 = z11 + t6;
+        let z12 = t7 + &self.c1.c2;
+        let z12 = z12 + z12;
+        let z12 = z12 + t7;
+        Fp12::new(Fp6::new(z00, z01, z02), Fp6::new(z10, z11, z12))
+    }
+
+    fn n_cyclotomic_square(&self, by: u64) -> Fp12<C> {
+        (0..by).fold(*self, |acc, _| acc.cyclotomic_square())
+    }
+
+    pub(crate) fn powt(&self) -> Fp12<C> {
+        let a = self.cyclotomic_square();
+        let a = a * self;
+        let a = a.n_cyclotomic_square(2);
+        let a = a * self;
+        let a = a.n_cyclotomic_square(3);
+        let a = a * self;
+        let a = a.n_cyclotomic_square(9);
+        let a = a * self;
+        let a = a.n_cyclotomic_square(32);
+        let a = a * self;
+        let a = a.n_cyclotomic_square(15);
+        let a = a * self;
+        a.cyclotomic_square()
     }
 
     pub fn div(&self, rhs: &Fp12<C>) -> Fp12<C> {
@@ -120,11 +197,30 @@ impl<C: Curve> Fp12<C> {
     }
 
     #[inline(always)]
+    pub fn is_one(&self) -> bool {
+        self.c0.is_one() && self.c1.is_zero()
+    }
+
+    #[inline(always)]
     pub fn conjugate(&self) -> Self {
         Fp12::new(self.c0, -self.c1)
     }
 
     pub fn pow_vartime(&self, by: &[u64; 6]) -> Self {
+        let mut res = Self::one();
+        for e in by.iter().rev() {
+            for i in (0..64).rev() {
+                res = res.square();
+
+                if ((*e >> i) & 1) == 1 {
+                    res *= self;
+                }
+            }
+        }
+        res
+    }
+
+    pub fn pow_vartime_extended(&self, by: &[u64]) -> Self {
         let mut res = Self::one();
         for e in by.iter().rev() {
             for i in (0..64).rev() {
@@ -796,6 +892,43 @@ mod test {
                 .frobenius_map()
                 .frobenius_map()
         );
+    }
+
+    #[test]
+    fn test_cyclotomic_square() {
+        for _ in 0..10 {
+            let a = fp12_rand();
+            assert_eq!(a.cyclotomic_square(), a.n_cyclotomic_square(1));
+            assert_eq!(
+                a.cyclotomic_square().cyclotomic_square(),
+                a.n_cyclotomic_square(2)
+            );
+            assert_eq!(
+                a.cyclotomic_square()
+                    .cyclotomic_square()
+                    .cyclotomic_square(),
+                a.n_cyclotomic_square(3)
+            );
+            assert_eq!(
+                a.cyclotomic_square()
+                    .cyclotomic_square()
+                    .cyclotomic_square()
+                    .cyclotomic_square(),
+                a.n_cyclotomic_square(4)
+            );
+        }
+    }
+
+    #[test]
+    fn test_pow_vartime() {
+        for _ in 0..10 {
+            let a = fp12_rand();
+            let exp = (0..6).map(|_| rand::random::<u64>()).collect::<Vec<_>>();
+            let lhs = a.pow_vartime(&exp.clone().try_into().unwrap());
+            let rhs = a.pow_vartime_extended(exp.as_slice());
+
+            assert_eq!(lhs, rhs);
+        }
     }
 }
 

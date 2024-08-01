@@ -6,8 +6,8 @@ use crate::{fp2::Fp2, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
 pub struct G2Affine<C: Curve> {
-    x: Fp2<C>,
-    y: Fp2<C>,
+    pub(crate) x: Fp2<C>,
+    pub(crate) y: Fp2<C>,
     is_infinity: bool,
 }
 
@@ -69,12 +69,29 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
     }
 
     fn random(mut rng: impl rand::Rng) -> Self {
-        let x = Fp2::random(&mut rng);
-        let y = Fp2::random(&mut rng);
-        Self {
-            x,
-            y,
-            is_infinity: false,
+        let b = Fp2 {
+            c0: Fp::from_raw_unchecked(C::B2_X),
+            c1: Fp::from_raw_unchecked(C::B2_Y),
+        };
+        loop {
+            let x = Fp2::random(&mut rng);
+            let flip_sign = rng.next_u32() % 2 != 0;
+
+            // Obtain the corresponding y-coordinate given x as y = sqrt(x^3 + 4)
+            let p = ((x.square() * x) + b).sqrt().map(|y| G2Affine {
+                x,
+                y: if flip_sign { -y } else { y },
+                is_infinity: false,
+            });
+
+            if p.is_some().into() {
+                // let p = p.unwrap().to_curve().clear_cofactor();
+                let p = p.unwrap();
+
+                if bool::from(!p.is_identity()) {
+                    return p;
+                }
+            }
         }
     }
 
@@ -440,5 +457,19 @@ mod test {
         );
         assert!(!a.is_torsion_free());
         assert!(G2Affine::<Bls12381Curve>::generator().is_torsion_free());
+    }
+
+    #[test]
+    fn test_double_and_add_arithmetic() {
+        let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        let q = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        let r = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+
+        let double_p_add_q = p.double() + q;
+        let p_plus_q_plus_p = (p + q) + p;
+
+        assert_eq!(p + q, q + p);
+        assert_eq!((p + q) + r, p + (q + r));
+        assert_eq!(double_p_add_q, p_plus_q_plus_p);
     }
 }

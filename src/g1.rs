@@ -5,8 +5,8 @@ use crate::{fp::Fp, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
 pub struct G1Affine<C: Curve> {
-    x: Fp<C>,
-    y: Fp<C>,
+    pub(crate) x: Fp<C>,
+    pub(crate) y: Fp<C>,
     is_infinity: bool,
 }
 
@@ -62,12 +62,26 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
     }
 
     fn random(mut rng: impl rand::Rng) -> Self {
-        let x = Fp::random(&mut rng);
-        let y = Fp::random(&mut rng);
-        Self {
-            x,
-            y,
-            is_infinity: false,
+        let b = Fp::from_raw_unchecked(C::B);
+        loop {
+            let x = Fp::random(&mut rng);
+            let flip_sign = rng.next_u32() % 2 != 0;
+
+            // Obtain the corresponding y-coordinate given x as y = sqrt(x^3 + 4)
+            let p = ((x.square() * x) + b).sqrt().map(|y| G1Affine {
+                x,
+                y: if flip_sign { -y } else { y },
+                is_infinity: false,
+            });
+
+            if p.is_some().into() {
+                // let p = p.unwrap().to_curve().clear_cofactor();
+                let p = p.unwrap();
+
+                if bool::from(!p.is_identity()) {
+                    return p;
+                }
+            }
         }
     }
 
@@ -92,7 +106,7 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
 }
 
 impl<C: Curve> G1Affine<C> {
-    fn is_on_curve(&self) -> bool {
+    pub(crate) fn is_on_curve(&self) -> bool {
         let x = self.x;
         let y = self.y;
 
@@ -158,10 +172,12 @@ impl<'a, 'b, C: Curve> Add<&'b G1Affine<C>> for &'a G1Affine<C> {
     #[inline]
     fn add(self, other: &'b G1Affine<C>) -> G1Affine<C> {
         if self.is_infinity {
+            println!("self is infinity");
             return *other;
         }
 
         if other.is_infinity {
+            println!("other is infinity");
             return *self;
         }
 
@@ -171,6 +187,7 @@ impl<'a, 'b, C: Curve> Add<&'b G1Affine<C>> for &'a G1Affine<C> {
         let y2 = other.y;
 
         if x1 == x2 && y1 == y2 {
+            println!("doubling");
             return self.double();
         }
 
@@ -348,5 +365,19 @@ mod test {
             assert!(b2 == b.double().double());
             assert!(b2 == b3);
         }
+    }
+
+    #[test]
+    fn test_double_and_add_arithmetic() {
+        let p = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        let q = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        let r = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+
+        let double_p_add_q = p.double() + q;
+        let p_plus_q_plus_p = (p + q) + p;
+
+        assert_eq!(p + q, q + p);
+        assert_eq!((p + q) + r, p + (q + r));
+        assert_eq!(double_p_add_q, p_plus_q_plus_p);
     }
 }

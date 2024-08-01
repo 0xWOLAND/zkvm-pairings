@@ -132,6 +132,14 @@ impl<C: Curve> Fp2<C> {
         Fp2 { c0, c1 }
     }
 
+    pub const fn non_residue() -> Fp2<C> {
+        Fp2::new(Fp::one(), Fp::one())
+    }
+
+    pub fn is_one(&self) -> bool {
+        self.c0.is_one() && self.c1.is_zero()
+    }
+
     /// Checks if this element is zero.
     pub fn is_zero(&self) -> bool {
         self.c0.is_zero() && self.c1.is_zero()
