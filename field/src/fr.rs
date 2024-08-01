@@ -18,7 +18,7 @@ use crate::utils::{adc, sbb};
 // The internal representation of this type is four 64-bit unsigned
 // integers in little-endian order. `Scalar` values are always in
 #[derive(Clone, Copy)]
-pub struct Fr<C: Curve>(pub(crate) [u64; 4], PhantomData<C>);
+pub struct Fr<C: Curve>(pub [u64; 4], PhantomData<C>);
 
 impl<C: Curve> fmt::Debug for Fr<C> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

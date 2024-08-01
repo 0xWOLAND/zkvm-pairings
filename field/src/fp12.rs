@@ -89,6 +89,24 @@ impl<C: Curve> Fp12<C> {
         Fp12::new(Fp6::one(), Fp6::zero())
     }
 
+    pub fn from_bytes(bytes: &[u8; 576]) -> Fp12<C> {
+        let c0 = Fp6::<C>::from_bytes(&bytes[..288].try_into().unwrap());
+        let c1 = Fp6::<C>::from_bytes(&bytes[288..].try_into().unwrap());
+
+        Fp12::<C>::new(c0, c1)
+    }
+
+    pub fn to_bytes(&self) -> [u8; 576] {
+        let mut res = [0u8; 576];
+        let c0 = self.c0.to_bytes();
+        let c1 = self.c1.to_bytes();
+
+        res[..288].copy_from_slice(&c0);
+        res[288..].copy_from_slice(&c1);
+
+        res
+    }
+
     pub(crate) fn random(mut rng: impl RngCore) -> Self {
         Fp12 {
             c0: Fp6::<C>::random(&mut rng),
@@ -96,19 +114,21 @@ impl<C: Curve> Fp12<C> {
         }
     }
 
-    pub fn mul_by_014(&self, c0: &Fp2<C>, c1: &Fp2<C>) -> Fp12<C> {
-        let a = self.c0.mul_by_01(c0, c1);
-        let b = Fp6::new(self.c1.c2.mul_by_nonresidue(), self.c1.c1, self.c1.c0);
-        let d = c1 + Fp2::one();
+    pub fn mul_by_014(&self, c0: &Fp2<C>, c1: &Fp2<C>, c4: &Fp2<C>) -> Fp12<C> {
+        let aa = self.c0.mul_by_01(c0, c1);
+        let bb = self.c1.mul_by_1(c4);
+        let o = c1 + c4;
+        let c1 = self.c1 + self.c0;
+        let c1 = c1.mul_by_01(c0, &o);
+        let c1 = c1 - aa - bb;
+        let c0 = bb;
+        let c0 = c0.mul_by_nonresidue();
+        let c0 = c0 + aa;
 
-        let c1 = (self.c1 + self.c0).mul_by_01(c0, &d);
-        let c1 = c1 - a - b;
-        let c0 = a + b.mul_by_nonresidue();
-
-        Fp12::new(c0, c1)
+        Fp12 { c0, c1 }
     }
 
-    pub(crate) fn mul_14_by_14(d0: &Fp2<C>, d1: &Fp2<C>, c0: &Fp2<C>, c1: &Fp2<C>) -> [Fp2<C>; 5] {
+    pub fn mul_14_by_14(d0: &Fp2<C>, d1: &Fp2<C>, c0: &Fp2<C>, c1: &Fp2<C>) -> [Fp2<C>; 5] {
         let x0 = d0 * c0;
         let x1 = d1 * c1;
         let x04 = c0 + d0;
@@ -171,7 +191,7 @@ impl<C: Curve> Fp12<C> {
         (0..by).fold(*self, |acc, _| acc.cyclotomic_square())
     }
 
-    pub(crate) fn powt(&self) -> Fp12<C> {
+    pub fn powt(&self) -> Fp12<C> {
         let a = self.cyclotomic_square();
         let a = a * self;
         let a = a.n_cyclotomic_square(2);
@@ -929,6 +949,18 @@ mod test {
 
             assert_eq!(lhs, rhs);
         }
+    }
+
+    #[test]
+    fn test_from_bytes() {
+        // let bytes = Fp::<Bls12381Curve>::one().to_bytes_unsafe();
+        // println!("{:?}", bytes);
+        assert_eq!(
+            Fp2::<Bls12381Curve>::from_bytes(&Fp2::<Bls12381Curve>::to_bytes(
+                &Fp2::<Bls12381Curve>::one()
+            )),
+            Fp2::<Bls12381Curve>::one()
+        );
     }
 }
 

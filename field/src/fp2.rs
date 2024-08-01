@@ -150,6 +150,19 @@ impl<C: Curve> Fp2<C> {
         Fp2::new(Fp::random(&mut rng), Fp::random(&mut rng))
     }
 
+    pub fn from_bytes(bytes: &[u8; 96]) -> Fp2<C> {
+        let c0 = Fp::<C>::from_bytes_unsafe(&bytes[..48].try_into().unwrap());
+        let c1 = Fp::<C>::from_bytes_unsafe(&bytes[48..].try_into().unwrap());
+        Fp2::new(c0, c1)
+    }
+
+    pub fn to_bytes(&self) -> [u8; 96] {
+        let mut res = [0u8; 96];
+        res[..48].copy_from_slice(&self.c0.to_bytes_unsafe());
+        res[48..].copy_from_slice(&self.c1.to_bytes_unsafe());
+        res
+    }
+
     /// Raises this element to p.
     #[inline(always)]
     pub fn frobenius_map(&self) -> Self {

@@ -1,7 +1,7 @@
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use crate::common::{AffinePoint, Curve};
-use crate::{fp::Fp, fr::Fr};
+use field::common::{AffinePoint, Curve};
+use field::{fp::Fp, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
 pub struct G1Affine<C: Curve> {
@@ -218,7 +218,7 @@ impl_binops_additive!(G1Affine<C>, G1Affine<C>);
 #[cfg(test)]
 mod test {
 
-    use crate::common::Bls12381Curve;
+    use field::common::Bls12381Curve;
     use rand::Rng;
 
     use super::*;

@@ -1,8 +1,8 @@
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use crate::common::{AffinePoint, Curve};
-use crate::fp::Fp;
-use crate::{fp2::Fp2, fr::Fr};
+use field::common::{AffinePoint, Curve};
+use field::fp::Fp;
+use field::{fp2::Fp2, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
 pub struct G2Affine<C: Curve> {
@@ -182,12 +182,12 @@ impl<C: Curve> G2Affine<C> {
 
     fn is_torsion_free(&self) -> bool {
         let lhs = self.psi();
-        let rhs = -&self.mul_by_x();
+        let rhs = -self.mul_by_x();
         lhs == rhs
     }
 }
 
-impl<'a, C: Curve> Neg for &'a G2Affine<C> {
+impl<C: Curve> Neg for G2Affine<C> {
     type Output = G2Affine<C>;
 
     fn neg(self) -> G2Affine<C> {
@@ -263,16 +263,55 @@ impl<'a, 'b, C: Curve> Sub<&'b G2Affine<C>> for &'a G2Affine<C> {
 
     #[inline]
     fn sub(self, other: &'b G2Affine<C>) -> G2Affine<C> {
-        self + (-other)
+        self + -(*other)
     }
 }
 
 impl_binops_multiplicative!(G2Affine<C>, Fr<C>);
 impl_binops_additive!(G2Affine<C>, G2Affine<C>);
 
+pub struct G2Projective<C: Curve> {
+    pub(crate) x: Fp2<C>,
+    pub(crate) y: Fp2<C>,
+    pub(crate) z: Fp2<C>,
+}
+
+impl<C: Curve> G2Projective<C> {
+    pub fn to_affine(&self) -> G2Affine<C> {
+        if self.is_identity() {
+            return G2Affine::<C>::identity();
+        }
+
+        let zinv = self.z.invert().unwrap();
+        let zinv2 = zinv.square();
+        let zinv3 = zinv2 * zinv;
+
+        let x = self.x * zinv2;
+        let y = self.y * zinv3;
+
+        G2Affine {
+            x,
+            y,
+            is_infinity: false,
+        }
+    }
+
+    pub fn from_affine(p: G2Affine<C>) -> Self {
+        G2Projective {
+            x: p.x,
+            y: p.y,
+            z: Fp2::one(),
+        }
+    }
+
+    pub fn is_identity(&self) -> bool {
+        self.z.is_zero()
+    }
+}
+
 #[cfg(test)]
 mod test {
-    use crate::common::Bls12381Curve;
+    use field::common::Bls12381Curve;
     use rand::Rng;
 
     use super::*;

@@ -1,15 +1,10 @@
+use field::{common::AffinePoint, fp::Fp, fp12::Fp12, fp2::Fp2, fp6::Fp6, fr::Fr, utils};
 use std::f32::NEG_INFINITY;
 
 use crate::{
-    common::{AffinePoint, Curve},
-    fp::Fp,
-    fp12::Fp12,
-    fp2::Fp2,
-    fp6::Fp6,
-    fr::Fr,
+    common::Curve,
     g1::G1Affine,
-    g2::G2Affine,
-    precompute::{compute_lines, LineEvaluations},
+    g2::{G2Affine, G2Projective},
 };
 
 /// 6U+2 for in NAF form
@@ -35,206 +30,205 @@ impl<C: Curve> LineEvaluation<C> {
     }
 }
 
-pub(crate) fn add_step<C: Curve>(
-    p1: G2Affine<C>,
-    p2: G2Affine<C>,
-) -> (G2Affine<C>, LineEvaluation<C>) {
-    let n = p2.y - p1.y;
-    let d = p2.x - p1.x;
-    let l = n / d;
+fn ell<C: Curve>(f: Fp12<C>, coeffs: &(Fp2<C>, Fp2<C>, Fp2<C>), p: &G1Affine<C>) -> Fp12<C> {
+    let mut c0 = coeffs.0;
+    let mut c1 = coeffs.1;
 
-    let ll = l.square();
-    let x_r = ll - (p1.x + p2.x);
+    c0.c0 *= p.y;
+    c0.c1 *= p.y;
 
-    let y_r = l * (p1.x - x_r) - p1.y;
+    c1.c0 *= p.x;
+    c1.c1 *= p.x;
 
-    let line = LineEvaluation {
-        x: l,
-        y: (l * p1.x) - p1.y,
-    };
-
-    let out = G2Affine::<C>::new(x_r, y_r, false);
-
-    (out, line)
+    f.mul_by_014(&coeffs.2, &c1, &c0)
 }
 
-pub(crate) fn double_step<C: Curve>(p1: G2Affine<C>) -> (G2Affine<C>, LineEvaluation<C>) {
-    let n = p1.x.square();
-    let n = n + n + n;
-    let d = p1.y + p1.y;
-    let l = n / d;
+fn doubling_step<C: Curve>(r: &mut G2Projective<C>) -> (Fp2<C>, Fp2<C>, Fp2<C>) {
+    // Adaptation of Algorithm 26, https://eprint.iacr.org/2010/354.pdf
+    let tmp0 = r.x.square();
+    let tmp1 = r.y.square();
+    let tmp2 = tmp1.square();
+    let tmp3 = (tmp1 + r.x).square() - tmp0 - tmp2;
+    let tmp3 = tmp3 + tmp3;
+    let tmp4 = tmp0 + tmp0 + tmp0;
+    let tmp6 = r.x + tmp4;
+    let tmp5 = tmp4.square();
+    let zsquared = r.z.square();
+    r.x = tmp5 - tmp3 - tmp3;
+    r.z = (r.z + r.y).square() - tmp1 - zsquared;
+    r.y = (tmp3 - r.x) * tmp4;
+    let tmp2 = tmp2 + tmp2;
+    let tmp2 = tmp2 + tmp2;
+    let tmp2 = tmp2 + tmp2;
+    r.y -= tmp2;
+    let tmp3 = tmp4 * zsquared;
+    let tmp3 = tmp3 + tmp3;
+    let tmp3 = -tmp3;
+    let tmp6 = tmp6.square() - tmp0 - tmp5;
+    let tmp1 = tmp1 + tmp1;
+    let tmp1 = tmp1 + tmp1;
+    let tmp6 = tmp6 - tmp1;
+    let tmp0 = r.z * zsquared;
+    let tmp0 = tmp0 + tmp0;
 
-    let x_r = l.square() - p1.x - p1.x;
-    let y_r = l * (p1.x - x_r) - p1.y;
-
-    let p = G2Affine::<C>::new(x_r, y_r, false);
-
-    let line = LineEvaluation {
-        x: l,
-        y: (l - p1.x) - p1.y,
-    };
-
-    (p, line)
+    (tmp0, tmp3, tmp6)
 }
 
-pub(crate) fn double_and_add_step<C: Curve>(
-    p1: &G2Affine<C>,
-    p2: &G2Affine<C>,
-) -> (G2Affine<C>, LineEvaluation<C>, LineEvaluation<C>) {
-    let l1 = (p1.y - p2.y) / (p1.x - p2.x);
-    let line1 = LineEvaluation {
-        x: l1,
-        y: (l1 * p1.x) - p1.y,
-    };
-    let xspq = l1.square() - p1.x - p2.x;
-    let l2 = -l1 - (p1.y + p1.y) / (xspq - p1.x);
-    let line2 = LineEvaluation {
-        x: l2,
-        y: (l2 * p1.x) - p1.y,
-    };
-    let xr = l2.square() - p1.x - xspq;
-    let yr = l2 * (p1.x - xr) - p1.y;
+fn addition_step<C: Curve>(r: &mut G2Projective<C>, q: &G2Affine<C>) -> (Fp2<C>, Fp2<C>, Fp2<C>) {
+    // Adaptation of Algorithm 27, https://eprint.iacr.org/2010./354.pdf
+    let zsquared = r.z.square();
+    let ysquared = q.y.square();
+    let t0 = zsquared * q.x;
+    let t1 = ((q.y + r.z).square() - ysquared - zsquared) * zsquared;
+    let t2 = t0 - r.x;
+    let t3 = t2.square();
+    let t4 = t3 + t3;
+    let t4 = t4 + t4;
+    let t5 = t4 * t2;
+    let t6 = t1 - r.y - r.y;
+    let t9 = t6 * q.x;
+    let t7 = t4 * r.x;
+    r.x = t6.square() - t5 - t7 - t7;
+    r.z = (r.z + t2).square() - zsquared - t3;
+    let t10 = q.y + r.z;
+    let t8 = (t7 - r.x) * t6;
+    let t0 = r.y * t5;
+    let t0 = t0 + t0;
+    r.y = t8 - t0;
+    let t10 = t10.square() - ysquared;
+    let ztsquared = r.z.square();
+    let t10 = t10 - ztsquared;
+    let t9 = t9 + t9 - t10;
+    let t10 = r.z + r.z;
+    let t6 = -t6;
+    let t1 = t6 + t6;
 
-    let out = G2Affine::<C>::new(xr, yr, false);
-    (out, line1, line2)
+    (t10, t1, t9)
 }
 
-pub(crate) fn triple_step<C: Curve>(
-    p1: &G2Affine<C>,
-) -> (G2Affine<C>, LineEvaluation<C>, LineEvaluation<C>) {
-    // λ1 = 3x²/2y
-    let n = p1.x.square();
-    let three = Fp::<C>::from(3);
-    let n = n * three;
-    let d = p1.y + p1.y;
-    let l1 = n / d;
+fn miller_loop<C: Curve>(p: &G1Affine<C>, q: &G2Affine<C>) -> Fp12<C> {
+    let p = p
+        .is_identity()
+        .then(G1Affine::<C>::generator)
+        .unwrap_or_else(|| *p);
+    let q = q
+        .is_identity()
+        .then(G2Affine::<C>::generator)
+        .unwrap_or_else(|| *q);
 
-    // compute line1
-    let line1 = LineEvaluation {
-        x: l1,
-        y: l1 * p1.x - p1.y,
-    };
+    let mut r = G2Projective::<C>::from_affine(q);
+    let mut f = Fp12::<C>::one();
 
-    // x2 = λ1² - 2x
-    let x2 = l1.square() - (p1.x + p1.x);
+    let mut found_one = false;
+    (0..64)
+        .rev()
+        .map(|b| (((C::X >> 1) >> b) & 1) == 1)
+        .for_each(|i| {
+            if !found_one {
+                found_one = i;
+                return;
+            }
 
-    // compute λ2 = 2y / (x2 - x) - λ1
-    let x1x2 = p1.x - x2;
-    let l2 = (d / x1x2) - l1;
+            let coeffs = doubling_step(&mut r);
+            f = ell(f, &coeffs, &p);
 
-    // compute line2
-    let line2 = LineEvaluation {
-        x: l2,
-        y: l2 * p1.x - p1.y,
-    };
+            if i {
+                let coeffs = addition_step(&mut r, &q);
+                f = ell(f, &coeffs, &p);
+            }
 
-    // xr = λ2² - x2 - x
-    let l2_square = l2.square();
-    let x_r = l2_square - (x2 + p1.x);
+            f = f.square();
+        });
+    let coeffs = doubling_step(&mut r);
+    f = ell(f, &coeffs, &p);
 
-    // yr = λ2 * (x - xr) - y
-    let pxrx = p1.x - x_r;
-    let y_r = (l2 * pxrx) - p1.y;
-
-    let out = G2Affine::<C>::new(x_r, y_r, false);
-
-    (out, line1, line2)
+    f.conjugate()
 }
 
-pub(crate) fn compute_tangent<C: Curve>(p: &G2Affine<C>) -> LineEvaluation<C> {
-    let n = p.x.square();
-    let three = Fp::<C>::from(3);
-    let n = n * three;
-    let d = p.y + p.y;
-    let l = n / d;
+pub struct G2Prepared<C: Curve> {
+    coeffs: Vec<(Fp2<C>, Fp2<C>, Fp2<C>)>,
+    is_infinity: bool,
+}
 
-    LineEvaluation {
-        x: l,
-        y: l * p.x - p.y,
+impl<C: Curve> From<G2Affine<C>> for G2Prepared<C> {
+    fn from(q: G2Affine<C>) -> Self {
+        let is_identity = q.is_identity();
+        let q = is_identity
+            .then(G2Affine::<C>::generator)
+            .unwrap_or_else(|| q);
+
+        let mut coeffs = Vec::with_capacity(68);
+        let mut r = G2Projective::<C>::from_affine(q);
+        let mut f = Fp12::<C>::one();
+
+        let mut found_one = false;
+        (0..64)
+            .rev()
+            .map(|b| (((C::X >> 1) >> b) & 1) == 1)
+            .for_each(|i| {
+                if !found_one {
+                    found_one = i;
+                    return;
+                }
+
+                coeffs.push(doubling_step(&mut r));
+
+                if i {
+                    coeffs.push(addition_step(&mut r, &q));
+                }
+
+                f = f.square();
+            });
+        coeffs.push(doubling_step(&mut r));
+
+        G2Prepared {
+            coeffs,
+            is_infinity: is_identity,
+        }
     }
 }
 
-fn miller_loop_lines<C: Curve>(p: &[G1Affine<C>], lines: &[LineEvaluations<C>]) -> Fp12<C> {
-    let n = p.len();
-    assert!(n > 0, "Cannot perform pairing on empty slices");
-    assert!(
-        n == lines[0].len(),
-        "Input slices must have the same length"
-    );
-    let y_inv = p
-        .iter()
-        .map(|p| p.y.invert().unwrap())
-        .collect::<Vec<Fp<C>>>();
-    let x_neg_over_y = p
-        .iter()
-        .zip(y_inv.iter())
-        .map(|(p, y_inv)| -p.x * y_inv)
-        .collect::<Vec<Fp<C>>>();
+fn multi_miller_loop<C: Curve>(p: &[G1Affine<C>], q: &[G2Prepared<C>]) -> Fp12<C> {
+    let mut f = Fp12::<C>::one();
+    let mut found_one = false;
+    let mut j = 0;
 
-    let mut res = Fp12::<C>::one();
-
-    res.c0.c0 = lines[0][0][62].y * y_inv[0];
-    res.c0.c1 = lines[0][0][62].x * x_neg_over_y[0];
-    res.c1.c1 = Fp2::one();
-
-    let prod_lines = Fp12::mul_14_by_14(
-        &(lines[0][1][62].x * y_inv[0]),
-        &(lines[0][1][62].y * x_neg_over_y[0]),
-        &res.c0.c0,
-        &res.c0.c1,
-    );
-
-    let mut res = Fp12::new(
-        Fp6::new(prod_lines[0], prod_lines[1], prod_lines[2]),
-        Fp6::new(res.c1.c0, prod_lines[3], prod_lines[4]),
-    );
-
-    (1..n).for_each(|i| {
-        res = res.mul_by_014(
-            &(lines[i][0][62].y * y_inv[i]),
-            &(lines[i][0][62].x * x_neg_over_y[i]),
-        );
-        res = res.mul_by_014(
-            &(lines[i][1][62].y * y_inv[i]),
-            &(lines[i][1][62].x * x_neg_over_y[i]),
-        );
-    });
-    (0..62).rev().for_each(|i| {
-        res = res.square();
-        (0..n).for_each(|j| {
-            if C::LOOP_COUNTER[j] == 0 {
-                res = res.mul_by_014(
-                    &(lines[i][0][j].y * y_inv[i]),
-                    &(lines[i][0][j].x * x_neg_over_y[i]),
-                );
-            } else {
-                res = res.mul_by_014(
-                    &(lines[i][0][j].y * y_inv[i]),
-                    &(lines[i][0][j].x * x_neg_over_y[i]),
-                );
-                res = res.mul_by_014(
-                    &(lines[i][1][j].y * y_inv[i]),
-                    &(lines[i][1][j].x * x_neg_over_y[i]),
-                );
+    (0..64)
+        .rev()
+        .map(|b| (((C::X >> 1) >> b) & 1) == 1)
+        .for_each(|i| {
+            if !found_one {
+                found_one = i;
+                return;
             }
-        })
-    });
 
-    res = res.conjugate();
+            p.iter().zip(q.iter()).for_each(|(a, b)| {
+                (!(a.is_identity() || b.is_infinity)).then(|| {
+                    f = ell(f, &b.coeffs[j], a);
+                    // println!("f = {:?}", f);
+                });
+            });
+            j += 1;
+            // println!("j = {}", j);
 
-    res
-}
+            if i {
+                p.iter().zip(q.iter()).for_each(|(a, b)| {
+                    (!(a.is_identity() || b.is_infinity)).then(|| {
+                        f = ell(f, &b.coeffs[j], a);
+                    });
+                });
+                j += 1;
+                // println!("j (add) = {}", j);
+            }
 
-fn miller_loop<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> Fp12<C> {
-    assert_eq!(p.len(), q.len(), "Input slices must have the same length");
-    assert!(p.len() > 0, "Cannot perform pairing on empty slices");
+            f = f.square();
+        });
 
-    let lines: Vec<LineEvaluations<C>> = q.iter().map(|q| compute_lines(q)).collect();
-    miller_loop_lines(p, lines.as_slice())
+    f.conjugate()
 }
 
 fn residue_test<C: Curve>(x: &Fp12<C>) -> bool {
-    let scaling_factor = Fp12::one(); // TODO
+    let (x, scaling_factor) = C::get_root_and_scaling_factor(x);
 
     let t0 = x.frobenius_map();
     let t1 = x.powt();
@@ -245,8 +239,15 @@ fn residue_test<C: Curve>(x: &Fp12<C>) -> bool {
     lhs == rhs
 }
 
-fn verify_pairing<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> bool {
-    let f = miller_loop(p, q);
+pub fn verify_pairing<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> bool {
+    let q = q
+        .iter()
+        .map(|q| G2Prepared::from(*q))
+        .collect::<Vec<G2Prepared<C>>>();
+
+    let f = multi_miller_loop(p, &q);
+    // let f = Fp12::<C>::one();
+    println!("f = {:?}", f);
 
     let buf = f.conjugate() / f;
     let f = buf.frobenius_map() * buf;
@@ -256,52 +257,70 @@ fn verify_pairing<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> bool {
 
 #[cfg(test)]
 mod test {
-    use crate::common::Bls12381Curve;
+    use field::common::Bls12381Curve;
 
     use super::*;
 
     #[test]
-    fn test_dobule() {
-        let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+    fn test_miller_loop() {
+        let p1 = G1Affine::<Bls12381Curve>::generator();
+        let q1 = G2Affine::<Bls12381Curve>::generator();
+        let p2 = G1Affine::<Bls12381Curve>::generator();
+        let q2 = G2Affine::<Bls12381Curve>::generator();
+        // let p1 = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        // let q1 = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        // let p2 = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        // let q2 = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
 
-        let (p1, l1) = double_step(p);
-        let p2 = p.double();
-
-        assert_eq!(p1, p2);
+        println!(
+            "{:?}",
+            multi_miller_loop(&[p1, p2], &[G2Prepared::from(q1), G2Prepared::from(q2)])
+        );
+        println!("verify pairing: {:?}", verify_pairing(&[p1, p2], &[q1, q2]));
     }
 
-    #[test]
-    fn test_add() {
-        let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
-        let q = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+    // #[test]
+    // fn test_dobule() {
+    //     let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
 
-        let (p1, l2) = add_step(p, q);
-        let p2 = p + q;
+    //     let (p1, l1) = double_step(p);
+    //     let p2 = p.double();
 
-        assert_eq!(p1, p2);
-    }
+    //     assert_eq!(p1, p2);
+    // }
 
-    #[test]
-    fn test_double_and_add() {
-        let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
-        let q = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+    // #[test]
+    // fn test_add() {
+    //     let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+    //     let q = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
 
-        let (p1, l1, ll1) = double_and_add_step(&p, &q);
-        let (_p2, l2) = double_step(p);
-        let (p2, ll2) = add_step(_p2, q);
+    //     let (p1, l2) = add_step(p, q);
+    //     let p2 = p + q;
 
-        assert_eq!(p1, p2);
-    }
+    //     assert_eq!(p1, p2);
+    // }
 
-    #[test]
-    fn test_triple_step() {
-        let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+    // #[test]
+    // fn test_double_and_add() {
+    //     let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+    //     let q = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
 
-        let (p1, l1, l2) = triple_step(&p);
-        // let (_p2, ll1) = double_step(p);
-        // let (p2, ll2) = add_step(_p2, p);
-        let p2 = p + p + p;
+    //     let (p1, l1, ll1) = double_and_add_step(&p, &q);
+    //     let (_p2, l2) = double_step(p);
+    //     let (p2, ll2) = add_step(_p2, q);
 
-        assert_eq!(p1, p2);
-    }
+    //     assert_eq!(p1, p2);
+    // }
+
+    // #[test]
+    // fn test_triple_step() {
+    //     let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+
+    //     let (p1, l1, l2) = triple_step(&p);
+    //     // let (_p2, ll1) = double_step(p);
+    //     // let (p2, ll2) = add_step(_p2, p);
+    //     let p2 = p + p + p;
+
+    //     assert_eq!(p1, p2);
+    // }
 }

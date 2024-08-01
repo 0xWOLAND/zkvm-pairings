@@ -11,7 +11,6 @@ use std::marker::PhantomData;
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
         use sp1_zkvm::syscalls::{bls12381_sys_bigint, syscall_bls12381_fp_mulmod};
-        use num_bigint::BigUint;
         use sp1_zkvm::lib::{io, unconstrained};
     }
 }
@@ -235,7 +234,7 @@ impl<C: Curve> Fp<C> {
         d0 + d1 * Fp::<C>::from_raw_unchecked(C::R)
     }
 
-    pub(crate) fn random(mut rng: impl RngCore) -> Fp<C> {
+    pub fn random(mut rng: impl RngCore) -> Fp<C> {
         let mut bytes = [0u8; 96];
         rng.fill_bytes(&mut bytes);
 

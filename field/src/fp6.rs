@@ -91,12 +91,41 @@ impl<C: Curve> Fp6<C> {
         }
     }
 
-    pub(crate) fn random(mut rng: impl RngCore) -> Self {
+    pub(crate) fn random(mut rng: impl RngCore) -> Fp6<C> {
         Fp6 {
             c0: Fp2::random(&mut rng),
             c1: Fp2::random(&mut rng),
             c2: Fp2::random(&mut rng),
         }
+    }
+
+    pub fn from_bytes(bytes: &[u8; 288]) -> Fp6<C> {
+        let mut c0_bytes = [0u8; 96];
+        let mut c1_bytes = [0u8; 96];
+        let mut c2_bytes = [0u8; 96];
+
+        c0_bytes.copy_from_slice(&bytes[0..96]);
+        c1_bytes.copy_from_slice(&bytes[96..192]);
+        c2_bytes.copy_from_slice(&bytes[192..288]);
+
+        let c0 = Fp2::from_bytes(&c0_bytes);
+        let c1 = Fp2::from_bytes(&c1_bytes);
+        let c2 = Fp2::from_bytes(&c2_bytes);
+
+        Fp6::<C>::new(c0, c1, c2)
+    }
+
+    pub fn to_bytes(&self) -> [u8; 288] {
+        let mut res = [0u8; 288];
+        let c0_bytes = self.c0.to_bytes();
+        let c1_bytes = self.c1.to_bytes();
+        let c2_bytes = self.c2.to_bytes();
+
+        res[0..96].copy_from_slice(&c0_bytes);
+        res[96..192].copy_from_slice(&c1_bytes);
+        res[192..288].copy_from_slice(&c2_bytes);
+
+        res
     }
 
     pub fn mul_by_1(&self, c1: &Fp2<C>) -> Fp6<C> {
