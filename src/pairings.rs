@@ -7,225 +7,254 @@ use crate::{
     g2::{G2Affine, G2Projective},
 };
 
-/// 6U+2 for in NAF form
+type TwistedFieldElement<C: Curve> = Option<(Fp12<C>, Fp12<C>)>;
 
-pub(crate) const SIX_U_PLUS_2_NAF: [i8; 65] = [
-    0, 0, 0, 1, 0, 1, 0, -1, 0, 0, 1, -1, 0, 0, 1, 0, 0, 1, 1, 0, -1, 0, 0, 1, 0, -1, 0, 0, 0, 0,
-    1, 1, 1, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 1, 0, 0, -1, 0, 0, 0, 1, 1, 0, -1, 0,
-    0, 1, 0, 1, 1,
-];
+fn twist<C: Curve>(p: &G2Affine<C>) -> TwistedFieldElement<C> {
+    let x = p.x;
+    let y = p.y;
 
-#[derive(Clone, Copy)]
-pub(crate) struct LineEvaluation<C: Curve> {
-    pub(crate) x: Fp2<C>,
-    pub(crate) y: Fp2<C>,
+    let _x = (x.c0 - x.c1, x.c1);
+    let _y = (y.c0 - y.c1, y.c1);
+
+    let nx = Fp12::new(
+        Fp6 {
+            c0: Fp2::new(_x.0, Fp::zero()),
+            c1: Fp2::new(Fp::zero(), Fp::zero()),
+            c2: Fp2::new(Fp::zero(), Fp::zero()),
+        },
+        Fp6 {
+            c0: Fp2::new(_x.1, Fp::zero()),
+            c1: Fp2::new(Fp::zero(), Fp::zero()),
+            c2: Fp2::new(Fp::zero(), Fp::zero()),
+        },
+    );
+
+    let ny = Fp12::new(
+        Fp6 {
+            c0: Fp2::new(_y.0, Fp::zero()),
+            c1: Fp2::new(Fp::zero(), Fp::zero()),
+            c2: Fp2::new(Fp::zero(), Fp::zero()),
+        },
+        Fp6 {
+            c0: Fp2::new(_y.1, Fp::zero()),
+            c1: Fp2::new(Fp::zero(), Fp::zero()),
+            c2: Fp2::new(Fp::zero(), Fp::zero()),
+        },
+    );
+
+    let w: Fp12<C> = Fp12::new(
+        Fp6 {
+            c0: Fp2::new(Fp::zero(), Fp::one()),
+            c1: Fp2::new(Fp::zero(), Fp::zero()),
+            c2: Fp2::new(Fp::zero(), Fp::zero()),
+        },
+        Fp6 {
+            c0: Fp2::new(Fp::zero(), Fp::zero()),
+            c1: Fp2::new(Fp::zero(), Fp::zero()),
+            c2: Fp2::new(Fp::zero(), Fp::zero()),
+        },
+    );
+
+    Some((nx / w.square(), ny / (w * w.square())))
 }
 
-impl<C: Curve> LineEvaluation<C> {
-    pub(crate) fn zero() -> Self {
-        LineEvaluation {
-            x: Fp2::<C>::zero(),
-            y: Fp2::<C>::zero(),
-        }
+fn embed_g1_in_fp12<C: Curve>(a: &G1Affine<C>) -> Option<(Fp12<C>, Fp12<C>)> {
+    Some((Fp12::from(a.x), Fp12::from(a.y)))
+}
+
+fn ell<C: Curve>(
+    p1: &TwistedFieldElement<C>,
+    p2: &TwistedFieldElement<C>,
+    t: &TwistedFieldElement<C>,
+) -> Fp12<C> {
+    let (x1, y1) = p1.unwrap();
+    let (x2, y2) = p2.unwrap();
+    let (xt, yt) = t.unwrap();
+
+    if x1 != x2 {
+        let m = (y2 - y2) / (x2 - x1);
+        m * (xt - x1) - yt + y1
+    } else if y1 == y2 {
+        let m = (x1.square() * Fp::from(3)) / (y1 * Fp::from(2));
+        m * (xt - x1) - yt + y1
+    } else {
+        xt - x1
     }
 }
 
-fn ell<C: Curve>(f: Fp12<C>, coeffs: &(Fp2<C>, Fp2<C>, Fp2<C>), p: &G1Affine<C>) -> Fp12<C> {
-    let mut c0 = coeffs.0;
-    let mut c1 = coeffs.1;
+fn double_step<C: Curve>(p: &TwistedFieldElement<C>) -> TwistedFieldElement<C> {
+    if p.is_none() {
+        return *p;
+    }
 
-    c0.c0 *= p.y;
-    c0.c1 *= p.y;
-
-    c1.c0 *= p.x;
-    c1.c1 *= p.x;
-
-    f.mul_by_014(&coeffs.2, &c1, &c0)
+    let (x, y) = p.unwrap();
+    let m = (x.square() * Fp::from(3)) / (y * Fp::from(2));
+    let x3 = m.square() - (x * Fp::from(2));
+    let y3 = m * (x - x3) - y;
+    Some((x3, y3))
 }
 
-fn doubling_step<C: Curve>(r: &mut G2Projective<C>) -> (Fp2<C>, Fp2<C>, Fp2<C>) {
-    // Adaptation of Algorithm 26, https://eprint.iacr.org/2010/354.pdf
-    let tmp0 = r.x.square();
-    let tmp1 = r.y.square();
-    let tmp2 = tmp1.square();
-    let tmp3 = (tmp1 + r.x).square() - tmp0 - tmp2;
-    let tmp3 = tmp3 + tmp3;
-    let tmp4 = tmp0 + tmp0 + tmp0;
-    let tmp6 = r.x + tmp4;
-    let tmp5 = tmp4.square();
-    let zsquared = r.z.square();
-    r.x = tmp5 - tmp3 - tmp3;
-    r.z = (r.z + r.y).square() - tmp1 - zsquared;
-    r.y = (tmp3 - r.x) * tmp4;
-    let tmp2 = tmp2 + tmp2;
-    let tmp2 = tmp2 + tmp2;
-    let tmp2 = tmp2 + tmp2;
-    r.y -= tmp2;
-    let tmp3 = tmp4 * zsquared;
-    let tmp3 = tmp3 + tmp3;
-    let tmp3 = -tmp3;
-    let tmp6 = tmp6.square() - tmp0 - tmp5;
-    let tmp1 = tmp1 + tmp1;
-    let tmp1 = tmp1 + tmp1;
-    let tmp6 = tmp6 - tmp1;
-    let tmp0 = r.z * zsquared;
-    let tmp0 = tmp0 + tmp0;
+fn add_step<C: Curve>(
+    p: &TwistedFieldElement<C>,
+    q: &TwistedFieldElement<C>,
+) -> TwistedFieldElement<C> {
+    if p.is_none() {
+        return q.clone();
+    } else if q.is_none() {
+        return p.clone();
+    }
 
-    (tmp0, tmp3, tmp6)
-}
+    let (x1, y1) = p.unwrap();
+    let (x2, y2) = q.unwrap();
 
-fn addition_step<C: Curve>(r: &mut G2Projective<C>, q: &G2Affine<C>) -> (Fp2<C>, Fp2<C>, Fp2<C>) {
-    // Adaptation of Algorithm 27, https://eprint.iacr.org/2010./354.pdf
-    let zsquared = r.z.square();
-    let ysquared = q.y.square();
-    let t0 = zsquared * q.x;
-    let t1 = ((q.y + r.z).square() - ysquared - zsquared) * zsquared;
-    let t2 = t0 - r.x;
-    let t3 = t2.square();
-    let t4 = t3 + t3;
-    let t4 = t4 + t4;
-    let t5 = t4 * t2;
-    let t6 = t1 - r.y - r.y;
-    let t9 = t6 * q.x;
-    let t7 = t4 * r.x;
-    r.x = t6.square() - t5 - t7 - t7;
-    r.z = (r.z + t2).square() - zsquared - t3;
-    let t10 = q.y + r.z;
-    let t8 = (t7 - r.x) * t6;
-    let t0 = r.y * t5;
-    let t0 = t0 + t0;
-    r.y = t8 - t0;
-    let t10 = t10.square() - ysquared;
-    let ztsquared = r.z.square();
-    let t10 = t10 - ztsquared;
-    let t9 = t9 + t9 - t10;
-    let t10 = r.z + r.z;
-    let t6 = -t6;
-    let t1 = t6 + t6;
+    if (x1 == x2) && (y1 == y2) {
+        return double_step(p);
+    } else if x2 == x1 {
+        return None;
+    }
 
-    (t10, t1, t9)
+    let m = (y2 - y1) / (x2 - x1);
+    let x3 = m.square() - x1 - x2;
+    let y3 = m * (x1 - x3) - y1;
+    Some((x3, y3))
 }
 
 fn miller_loop<C: Curve>(p: &G1Affine<C>, q: &G2Affine<C>) -> Fp12<C> {
-    let p = p
-        .is_identity()
-        .then(G1Affine::<C>::generator)
-        .unwrap_or_else(|| *p);
-    let q = q
-        .is_identity()
-        .then(G2Affine::<C>::generator)
-        .unwrap_or_else(|| *q);
-
-    let mut r = G2Projective::<C>::from_affine(q);
-    let mut f = Fp12::<C>::one();
-
-    let mut found_one = false;
-    (0..64)
-        .rev()
-        .map(|b| (((C::X >> 1) >> b) & 1) == 1)
-        .for_each(|i| {
-            if !found_one {
-                found_one = i;
-                return;
-            }
-
-            let coeffs = doubling_step(&mut r);
-            f = ell(f, &coeffs, &p);
-
-            if i {
-                let coeffs = addition_step(&mut r, &q);
-                f = ell(f, &coeffs, &p);
-            }
-
-            f = f.square();
-        });
-    let coeffs = doubling_step(&mut r);
-    f = ell(f, &coeffs, &p);
-
-    f.conjugate()
-}
-
-pub struct G2Prepared<C: Curve> {
-    coeffs: Vec<(Fp2<C>, Fp2<C>, Fp2<C>)>,
-    is_infinity: bool,
-}
-
-impl<C: Curve> From<G2Affine<C>> for G2Prepared<C> {
-    fn from(q: G2Affine<C>) -> Self {
-        let is_identity = q.is_identity();
-        let q = is_identity
-            .then(G2Affine::<C>::generator)
-            .unwrap_or_else(|| q);
-
-        let mut coeffs = Vec::with_capacity(68);
-        let mut r = G2Projective::<C>::from_affine(q);
-        let mut f = Fp12::<C>::one();
-
-        let mut found_one = false;
-        (0..64)
-            .rev()
-            .map(|b| (((C::X >> 1) >> b) & 1) == 1)
-            .for_each(|i| {
-                if !found_one {
-                    found_one = i;
-                    return;
-                }
-
-                coeffs.push(doubling_step(&mut r));
-
-                if i {
-                    coeffs.push(addition_step(&mut r, &q));
-                }
-
-                f = f.square();
-            });
-        coeffs.push(doubling_step(&mut r));
-
-        G2Prepared {
-            coeffs,
-            is_infinity: is_identity,
-        }
+    if p.is_identity() || q.is_identity() {
+        return Fp12::one();
     }
-}
-
-fn multi_miller_loop<C: Curve>(p: &[G1Affine<C>], q: &[G2Prepared<C>]) -> Fp12<C> {
+    let p = embed_g1_in_fp12(p);
+    let q = twist(q);
     let mut f = Fp12::<C>::one();
-    let mut found_one = false;
-    let mut j = 0;
+    let mut r = q.clone();
 
-    (0..64)
-        .rev()
-        .map(|b| (((C::X >> 1) >> b) & 1) == 1)
-        .for_each(|i| {
-            if !found_one {
-                found_one = i;
-                return;
-            }
+    C::LOOP_COUNTER.iter().rev().for_each(|&i| {
+        println!("cycle-tracker-start: square * ell");
+        f = f.square() * ell(&r, &r, &p);
+        println!("cycle-tracker-end: square * ell");
 
-            p.iter().zip(q.iter()).for_each(|(a, b)| {
-                (!(a.is_identity() || b.is_infinity)).then(|| {
-                    f = ell(f, &b.coeffs[j], a);
-                    // println!("f = {:?}", f);
-                });
-            });
-            j += 1;
-            // println!("j = {}", j);
+        println!("cycle-tracker-start: double");
+        r = double_step(&r);
+        println!("cycle-tracker-end: double");
+        // if C::LOG_ATE_LOOP_COUNT & (1 << i) != 0 {
+        if i > 0 {
+            f = f * ell(&r, &q, &p);
+            println!("cycle-tracker-start: add");
+            r = add_step(&r, &q);
+            println!("cycle-tracker-end: add");
+        }
+    });
+    // let mut r = G2Projective::<C>::from_affine(q);
+    // let mut f = Fp12::<C>::one();
 
-            if i {
-                p.iter().zip(q.iter()).for_each(|(a, b)| {
-                    (!(a.is_identity() || b.is_infinity)).then(|| {
-                        f = ell(f, &b.coeffs[j], a);
-                    });
-                });
-                j += 1;
-                // println!("j (add) = {}", j);
-            }
+    // let mut found_one = false;
+    // (0..64)
+    //     .rev()
+    //     .map(|b| (((C::X >> 1) >> b) & 1) == 1)
+    //     .for_each(|i| {
+    //         if !found_one {
+    //             found_one = i;
+    //             return;
+    //         }
 
-            f = f.square();
-        });
+    //         let coeffs = doubling_step(&mut r);
+    //         f = ell(f, &coeffs, &p);
 
-    f.conjugate()
+    //         if i {
+    //             let coeffs = addition_step(&mut r, &q);
+    //             f = ell(f, &coeffs, &p);
+    //         }
+
+    //         f = f.square();
+    //     });
+    // let coeffs = doubling_step(&mut r);
+    // f = ell(f, &coeffs, &p);
+
+    // f.conjugate()
+    f
 }
+
+// pub struct G2Prepared<C: Curve> {
+//     coeffs: Vec<(Fp2<C>, Fp2<C>, Fp2<C>)>,
+//     is_infinity: bool,
+// }
+
+// impl<C: Curve> From<G2Affine<C>> for G2Prepared<C> {
+//     fn from(q: G2Affine<C>) -> Self {
+//         let is_identity = q.is_identity();
+//         let q = is_identity
+//             .then(G2Affine::<C>::generator)
+//             .unwrap_or_else(|| q);
+
+//         let mut coeffs = Vec::with_capacity(68);
+//         let mut r = G2Projective::<C>::from_affine(q);
+//         let mut f = Fp12::<C>::one();
+
+//         let mut found_one = false;
+//         (0..64)
+//             .rev()
+//             .map(|b| (((C::X >> 1) >> b) & 1) == 1)
+//             .for_each(|i| {
+//                 if !found_one {
+//                     found_one = i;
+//                     return;
+//                 }
+
+//                 coeffs.push(doubling_step(&mut r));
+
+//                 if i {
+//                     coeffs.push(addition_step(&mut r, &q));
+//                 }
+
+//                 f = f.square();
+//             });
+//         coeffs.push(doubling_step(&mut r));
+
+//         G2Prepared {
+//             coeffs,
+//             is_infinity: is_identity,
+//         }
+//     }
+// }
+
+// fn multi_miller_loop<C: Curve>(p: &[G1Affine<C>], q: &[G2Prepared<C>]) -> Fp12<C> {
+//     let mut f = Fp12::<C>::one();
+//     let mut found_one = false;
+//     let mut j = 0;
+
+//     (0..64)
+//         .rev()
+//         .map(|b| (((C::X >> 1) >> b) & 1) == 1)
+//         .for_each(|i| {
+//             if !found_one {
+//                 found_one = i;
+//                 return;
+//             }
+
+//             p.iter().zip(q.iter()).for_each(|(a, b)| {
+//                 (!(a.is_identity() || b.is_infinity)).then(|| {
+//                     f = ell(f, &b.coeffs[j], a);
+//                     // println!("f = {:?}", f);
+//                 });
+//             });
+//             j += 1;
+//             // println!("j = {}", j);
+
+//             if i {
+//                 p.iter().zip(q.iter()).for_each(|(a, b)| {
+//                     (!(a.is_identity() || b.is_infinity)).then(|| {
+//                         f = ell(f, &b.coeffs[j], a);
+//                     });
+//                 });
+//                 j += 1;
+//                 // println!("j (add) = {}", j);
+//             }
+
+//             f = f.square();
+//         });
+
+//     f.conjugate()
+// }
 
 fn residue_test<C: Curve>(x: &Fp12<C>) -> bool {
     let (x, scaling_factor) = C::get_root_and_scaling_factor(x);
@@ -240,13 +269,16 @@ fn residue_test<C: Curve>(x: &Fp12<C>) -> bool {
 }
 
 pub fn verify_pairing<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> bool {
-    let q = q
-        .iter()
-        .map(|q| G2Prepared::from(*q))
-        .collect::<Vec<G2Prepared<C>>>();
+    // let q = q
+    //     .iter()
+    //     .map(|q| G2Prepared::from(*q))
+    //     .collect::<Vec<G2Prepared<C>>>();
 
-    let f = multi_miller_loop(p, &q);
-    // let f = Fp12::<C>::one();
+    // let f = multi_miller_loop(p, &q);
+    p.iter().zip(q.iter()).for_each(|(p, q)| {
+        let f = miller_loop(p, q);
+    });
+    let f = Fp12::<C>::one();
     println!("f = {:?}", f);
 
     let buf = f.conjugate() / f;
@@ -271,12 +303,10 @@ mod test {
         // let q1 = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
         // let p2 = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
         // let q2 = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
-
-        println!(
-            "{:?}",
-            multi_miller_loop(&[p1, p2], &[G2Prepared::from(q1), G2Prepared::from(q2)])
-        );
-        println!("verify pairing: {:?}", verify_pairing(&[p1, p2], &[q1, q2]));
+        println!("p1: {:?}", p1);
+        println!("q1: {:?}", q1);
+        println!("millier loop: {:?}", miller_loop(&p1, &q1));
+        // println!("verify pairing: {:?}", verify_pairing(&[p1, p2], &[q1, q2]));
     }
 
     // #[test]
