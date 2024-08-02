@@ -5,12 +5,13 @@ use crate::utils::*;
 use core::fmt;
 use core::mem::transmute;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use num_bigint::BigUint;
 use rand::RngCore;
 use std::marker::PhantomData;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
-        use sp1_zkvm::syscalls::{bls12381_sys_bigint, syscall_bls12381_fp_mulmod};
+        use sp1_zkvm::syscalls::syscall_bls12381_fp_mulmod;
         use sp1_zkvm::lib::{io, unconstrained};
     }
 }
@@ -165,32 +166,29 @@ impl<C: Curve> Fp<C> {
 
     /// Attempts to convert a big-endian byte representation of
     /// a scalar into an `Fp`, failing if the input is not canonical.
-    pub fn from_bytes(bytes: &[u8; 48]) -> Result<Fp<C>, ()> {
-        let mut tmp = Fp::from_raw_unchecked([0, 0, 0, 0, 0, 0]);
+    pub fn from_bytes(bytes: &[u8; 48]) -> Fp<C> {
+        unsafe {
+            let a = BigUint::from_bytes_be(bytes)
+                % BigUint::from_slice(&transmute::<[u64; 6], [u32; 12]>(C::MODULUS));
+            let mut words = a.to_u64_digits();
+            words.resize(6, 0);
 
-        tmp.0[5] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap());
-        tmp.0[4] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[8..16]).unwrap());
-        tmp.0[3] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[16..24]).unwrap());
-        tmp.0[2] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[24..32]).unwrap());
-        tmp.0[1] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[32..40]).unwrap());
-        tmp.0[0] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[40..48]).unwrap());
-
-        // Try to subtract the modulus
-        let (_, borrow) = sbb(tmp.0[0], C::MODULUS[0], 0);
-        let (_, borrow) = sbb(tmp.0[1], C::MODULUS[1], borrow);
-        let (_, borrow) = sbb(tmp.0[2], C::MODULUS[2], borrow);
-        let (_, borrow) = sbb(tmp.0[3], C::MODULUS[3], borrow);
-        let (_, borrow) = sbb(tmp.0[4], C::MODULUS[4], borrow);
-        let (_, borrow) = sbb(tmp.0[5], C::MODULUS[5], borrow);
-
-        // If the element is smaller than MODULUS then the
-        // subtraction will underflow, producing a borrow value
-        // of 0xffff...ffff. Otherwise, it'll be zero.
-        if (borrow as u8) & 1 > 0 {
-            Err(())
-        } else {
-            Ok(tmp)
+            Fp::from_raw_unchecked(words.try_into().unwrap())
         }
+    }
+
+    pub fn is_lexicographically_largest(&self) -> bool {
+        let lhs = self.0;
+        let rhs = (-self).0;
+
+        for (l, r) in lhs.iter().zip(rhs.iter()).rev() {
+            if l > r {
+                return true;
+            } else if l < r {
+                return false;
+            }
+        }
+        false
     }
 
     /// Converts an element of `Fp` into a byte representation in
@@ -368,12 +366,13 @@ impl<C: Curve> Fp<C> {
 
     #[cfg(target_os = "zkvm")]
     pub fn add(&self, rhs: &Fp<C>) -> Fp<C> {
-        let mut result: [u32; 12] = [0; 12];
+        use sp1_zkvm::syscalls::syscall_bls12381_fp_addmod;
+
         unsafe {
-            let lhs = transmute::<&[u64; 6], &[u32; 12]>(&self.0);
-            let rhs = transmute::<&[u64; 6], &[u32; 12]>(&rhs.0);
-            bls12381_sys_bigint(&mut result, 1, lhs, rhs);
-            Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut result))
+            let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
+            let rhs = transmute::<[u64; 6], [u32; 12]>(rhs.0);
+            syscall_bls12381_fp_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
+            Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs))
         }
     }
 
@@ -435,16 +434,16 @@ impl<C: Curve> Fp<C> {
     /// Multiplies two field elements
     #[cfg(target_os = "zkvm")]
     pub fn mul(&self, rhs: &Fp<C>) -> Fp<C> {
-        let mut result: [u32; 12] = [0; 12];
         unsafe {
-            let lhs = transmute::<&[u64; 6], &[u32; 12]>(&self.0);
-            let rhs = transmute::<&[u64; 6], &[u32; 12]>(&rhs.0);
-            bls12381_sys_bigint(&mut result, 0, lhs, rhs);
-            Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut result))
+            let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
+            let rhs = transmute::<[u64; 6], [u32; 12]>(rhs.0);
+            syscall_bls12381_fp_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
+            Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs))
         }
     }
 
     pub fn div(&self, rhs: &Fp<C>) -> Fp<C> {
+        assert!(!rhs.is_zero(), "Division by zero");
         self * rhs.invert().unwrap()
     }
 
@@ -458,6 +457,7 @@ impl<C: Curve> FieldElement for Fp<C> {} // For `AffinePoint` trait
 
 #[cfg(test)]
 mod test {
+    use num_bigint::BigUint;
     use rand::Rng;
 
     use crate::common::Bls12381Curve;
@@ -610,5 +610,54 @@ mod test {
             let b = fp_rand();
             assert_eq!(a / b, a * b.invert().unwrap());
         }
+    }
+
+    #[test]
+    fn test_lexicographic_largest() {
+        unsafe {
+            let modulus =
+                BigUint::from_slice(&transmute::<[u64; 6], [u32; 12]>(Bls12381Curve::MODULUS));
+            for _ in 0..100 {
+                let mut rng = rand::thread_rng();
+                let a: Vec<u8> = (0..48).map(|_| rng.gen()).collect();
+                let a = BigUint::from_bytes_le(a.as_slice()) % &modulus;
+                let a_inv = &modulus - &a;
+                let mut a_bytes = a.to_bytes_le();
+                a_bytes.resize(48, 0);
+
+                let a_fp = Fp::<Bls12381Curve>::from_bytes_unsafe(&a_bytes.try_into().unwrap());
+
+                assert_eq!(a_fp.is_lexicographically_largest(), a > a_inv);
+            }
+        }
+    }
+
+    #[test]
+    fn test_special_mul() {
+        let x = Fp::<Bls12381Curve>::from_raw_unchecked([
+            0xf1fbbbca6f146556,
+            0xd97b05f5c8d900ac,
+            0xc9dd98c56817e878,
+            0x74e56183bb247c8f,
+            0x7834a1246463e647,
+            0x13efc82d2017e9c5,
+        ]);
+        let y = Fp::<Bls12381Curve>::from_raw_unchecked([
+            0x5fcc527688b29a91,
+            0x7f13074c19935910,
+            0x8061fd6c7c4f63ab,
+            0x3ff8fd1247210d17,
+            0x46f892dfc6ed97d6,
+            0x0cde9cb75380d8a3,
+        ]);
+
+        let c0 = Fp::<Bls12381Curve>::from_raw_unchecked([
+            0xca07f3855ab48b7d,
+            0x6503cd6e1c4403fd,
+            0x56fc734cd655c204,
+            0x08b3e23363105a39,
+            0x6fcf81ef6ef0c514,
+            0x1169164989c84ac5,
+        ]);
     }
 }

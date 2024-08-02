@@ -2,6 +2,13 @@ use core::fmt;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use rand_core::RngCore;
 
+cfg_if::cfg_if! {
+    if #[cfg(target_os = "zkvm")] {
+        use sp1_zkvm::syscalls::syscall_bls12381_fp2_mulmod;
+        use std::mem::transmute;
+    }
+}
+
 use crate::common::{Curve, FieldElement};
 use crate::fp::Fp;
 
@@ -210,6 +217,7 @@ impl<C: Curve> Fp2<C> {
     }
 
     /// Multiplies this element by another element.
+    #[cfg(not(target_os = "zkvm"))]
     pub fn mul(&self, rhs: &Fp2<C>) -> Fp2<C> {
         // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
         // computes the result as:
@@ -227,6 +235,18 @@ impl<C: Curve> Fp2<C> {
             self.c0 * rhs.c0 - self.c1 * rhs.c1,
             self.c0 * rhs.c1 + self.c1 * rhs.c0,
         )
+    }
+
+    /// Multiplies this element by another element.
+    #[cfg(target_os = "zkvm")]
+    pub fn mul(&self, rhs: &Fp2<C>) -> Fp2<C> {
+        unsafe {
+            let mut lhs = transmute::<Fp2<C>, [u32; 24]>(*self);
+            let rhs = transmute::<Fp2<C>, [u32; 24]>(*rhs);
+            // bls12381_sys_bigint(&mut result, 0, lhs, rhs);
+            syscall_bls12381_fp2_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
+            *transmute::<&mut [u32; 24], &Fp2<C>>(&mut lhs)
+        }
     }
 
     pub fn div(&self, rhs: &Fp2<C>) -> Fp2<C> {
@@ -293,6 +313,12 @@ impl<C: Curve> Fp2<C> {
         }
     }
 
+    #[inline]
+    pub fn lexicographically_largest(&self) -> bool {
+        self.c1.is_lexicographically_largest()
+            || (self.c1 == Fp::zero() && self.c0.is_lexicographically_largest())
+    }
+
     /// Computes the multiplicative inverse of this field
     /// element, returning None in the case that this element
     /// is zero.
@@ -338,6 +364,9 @@ impl<C: Curve> FieldElement for Fp2<C> {} // For `AffinePoint` trait
 
 #[cfg(test)]
 mod test {
+    use std::mem::transmute;
+
+    use num_bigint::BigUint;
     use rand::Rng;
 
     use crate::common::Bls12381Curve;
@@ -499,6 +528,48 @@ mod test {
             let a = fp2_rand();
             assert_eq!(a * a.invert().unwrap(), Fp2::one());
             assert_eq!(a.invert().unwrap().invert().unwrap(), a);
+        }
+    }
+
+    #[test]
+    fn test_lexicographic_largest() {
+        unsafe {
+            let modulus =
+                BigUint::from_slice(&transmute::<[u64; 6], [u32; 12]>(Bls12381Curve::MODULUS));
+
+            let gen_test_value = || {
+                let mut rng = rand::thread_rng();
+                let a: Vec<u8> = (0..48).map(|_| rng.gen()).collect();
+                let a = BigUint::from_bytes_le(a.as_slice()) % &modulus;
+                let a_inv = &modulus - &a;
+                let mut a_bytes = a.to_bytes_le();
+                a_bytes.resize(48, 0);
+
+                let a_fp = Fp::<Bls12381Curve>::from_bytes_unsafe(&a_bytes.try_into().unwrap());
+                (a, a_inv, a_fp)
+            };
+
+            for _ in 0..100 {
+                let (a, a_inv, a_fp) = gen_test_value();
+                let (b, b_inv, b_fp) = gen_test_value();
+
+                let lhs = Fp2::new(a_fp, b_fp).lexicographically_largest();
+                let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
+
+                assert_eq!(lhs, rhs);
+            }
+
+            for _ in 0..100 {
+                let (a, a_inv, a_fp) = gen_test_value();
+                let b = BigUint::ZERO;
+                let b_inv = BigUint::ZERO;
+                let b_fp = Fp::<Bls12381Curve>::zero();
+
+                let lhs = Fp2::new(a_fp, b_fp).lexicographically_largest();
+                let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
+
+                assert_eq!(lhs, rhs);
+            }
         }
     }
 }

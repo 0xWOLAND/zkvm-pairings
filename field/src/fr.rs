@@ -148,6 +148,12 @@ impl<C: Curve> Fr<C> {
         self.add(self)
     }
 
+    pub fn random(mut rng: impl RngCore) -> Self {
+        let mut buf = [0; 64];
+        rng.fill_bytes(&mut buf);
+        Self::from_bytes_wide(&buf)
+    }
+
     /// Attempts to convert a little-endian byte representation of
     /// a scalar into a `Scalar`, failing if the input is not canonical.
     pub fn from_bytes(bytes: &[u8; 32]) -> CtOption<Fr<C>> {

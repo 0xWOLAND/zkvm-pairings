@@ -6,3 +6,4 @@ pub mod g2;
 pub mod pairings;
 
 pub(crate) mod common;
+pub(crate) mod witness;

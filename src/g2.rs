@@ -17,6 +17,8 @@ impl<C: Curve> PartialEq for G2Affine<C> {
     }
 }
 
+impl<C: Curve> Eq for G2Affine<C> {}
+
 impl<C: Curve> AffinePoint<C> for G2Affine<C> {
     type Dtype = Fp2<C>;
 
@@ -185,6 +187,66 @@ impl<C: Curve> G2Affine<C> {
         let rhs = -self.mul_by_x();
         lhs == rhs
     }
+
+    pub fn from_compressed_unchecked(bytes: &[u8; 96]) -> Option<Self> {
+        // Obtain the three flags from the start of the byte sequence
+        let compression_flag_set = (bytes[0] >> 7) & 1 == 1;
+        let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
+        let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
+
+        // Attempt to obtain the x-coordinate
+        let xc1 = {
+            let mut tmp = [0; 48];
+            tmp.copy_from_slice(&bytes[0..48]);
+
+            // Mask away the flag bits
+            tmp[0] &= 0b0001_1111;
+
+            Some(Fp::from_bytes(&tmp))
+        };
+        let xc0 = {
+            let mut tmp = [0; 48];
+            tmp.copy_from_slice(&bytes[48..96]);
+
+            Some(Fp::from_bytes(&tmp))
+        };
+
+        xc1.and_then(|xc1| {
+            xc0.and_then(|xc0| {
+                let x = Fp2 { c0: xc0, c1: xc1 };
+
+                if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
+                    // Infinity flag is set and x-coordinate is zero
+                    Some(G2Affine::identity())
+                } else if !infinity_flag_set && compression_flag_set {
+                    // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
+                    let y_result = ((x.square() * x)
+                        + Fp2::new(
+                            Fp::from_raw_unchecked(C::B2_X),
+                            Fp::from_raw_unchecked(C::B2_Y),
+                        ))
+                    .sqrt();
+
+                    y_result.map(|y| {
+                        // Switch to the correct y-coordinate if necessary
+                        let y = if y.lexicographically_largest() ^ sort_flag_set {
+                            -y
+                        } else {
+                            y
+                        };
+
+                        G2Affine {
+                            x,
+                            y,
+                            is_infinity: infinity_flag_set,
+                        }
+                    })
+                } else {
+                    None
+                }
+            })
+        })
+    }
 }
 
 impl<C: Curve> Neg for G2Affine<C> {
@@ -263,6 +325,9 @@ impl<'a, 'b, C: Curve> Sub<&'b G2Affine<C>> for &'a G2Affine<C> {
 
     #[inline]
     fn sub(self, other: &'b G2Affine<C>) -> G2Affine<C> {
+        if self == other {
+            return G2Affine::<C>::identity();
+        }
         self + -(*other)
     }
 }

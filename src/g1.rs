@@ -16,12 +16,15 @@ impl<C: Curve> PartialEq for G1Affine<C> {
     }
 }
 
+impl<C: Curve> Eq for G1Affine<C> {}
+
 impl<C: Curve> AffinePoint<C> for G1Affine<C> {
     type Dtype = Fp<C>;
 
     fn new(x: Self::Dtype, y: Self::Dtype, is_infinity: bool) -> Self {
         G1Affine { x, y, is_infinity }
     }
+
     fn identity() -> Self {
         G1Affine {
             x: Fp::zero(),
@@ -127,9 +130,60 @@ impl<C: Curve> G1Affine<C> {
         let rhs = self.endomorphism();
         lhs == rhs
     }
+
+    pub fn from_compressed_unchecked(bytes: &[u8; 48]) -> Option<Self> {
+        // Obtain the three flags from the start of the byte sequence
+        let compression_flag_set = (bytes[0] >> 7) & 1 == 1;
+        let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
+        let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
+
+        println!("compression_flag_set: {}", compression_flag_set);
+        println!("infinity_flag_set: {}", infinity_flag_set);
+        println!("sort_flag_set: {}", sort_flag_set);
+
+        // Attempt to obtain the x-coordinate
+        let x = {
+            let mut tmp = [0; 48];
+            tmp.copy_from_slice(&bytes[0..48]);
+
+            // Mask away the flag bits
+            tmp[0] &= 0b0001_1111;
+
+            Some(Fp::from_bytes(&tmp))
+        };
+
+        x.and_then(|x| {
+            if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
+                // Infinity flag is set and x-coordinate is zero
+                Some(G1Affine::identity())
+            } else if !infinity_flag_set && compression_flag_set {
+                // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
+                let y_result = ((x.square() * x) + Fp::<C>::from_raw_unchecked(C::B)).sqrt();
+                println!("x: {:?}", x);
+                println!("y_result: {:?}", y_result);
+
+                y_result.map(|y| {
+                    // Switch to the correct y-coordinate if necessary
+                    let y = if y.is_lexicographically_largest() ^ sort_flag_set {
+                        -y
+                    } else {
+                        y
+                    };
+
+                    G1Affine {
+                        x,
+                        y,
+                        is_infinity: infinity_flag_set,
+                    }
+                })
+            } else {
+                None
+            }
+        })
+    }
 }
 
-impl<'a, C: Curve> Neg for &'a G1Affine<C> {
+impl<C: Curve> Neg for G1Affine<C> {
     type Output = G1Affine<C>;
 
     fn neg(self) -> G1Affine<C> {
@@ -172,12 +226,10 @@ impl<'a, 'b, C: Curve> Add<&'b G1Affine<C>> for &'a G1Affine<C> {
     #[inline]
     fn add(self, other: &'b G1Affine<C>) -> G1Affine<C> {
         if self.is_infinity {
-            println!("self is infinity");
             return *other;
         }
 
         if other.is_infinity {
-            println!("other is infinity");
             return *self;
         }
 
@@ -187,7 +239,6 @@ impl<'a, 'b, C: Curve> Add<&'b G1Affine<C>> for &'a G1Affine<C> {
         let y2 = other.y;
 
         if x1 == x2 && y1 == y2 {
-            println!("doubling");
             return self.double();
         }
 
@@ -208,7 +259,10 @@ impl<'a, 'b, C: Curve> Sub<&'b G1Affine<C>> for &'a G1Affine<C> {
 
     #[inline]
     fn sub(self, other: &'b G1Affine<C>) -> G1Affine<C> {
-        self + (-other)
+        if self == other {
+            return G1Affine::<C>::identity();
+        }
+        self + -(*other)
     }
 }
 
@@ -369,15 +423,17 @@ mod test {
 
     #[test]
     fn test_double_and_add_arithmetic() {
-        let p = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
-        let q = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
-        let r = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        for _ in 0..100 {
+            let p = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+            let q = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+            let r = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
 
-        let double_p_add_q = p.double() + q;
-        let p_plus_q_plus_p = (p + q) + p;
+            let double_p_add_q = p.double() + q;
+            let p_plus_q_plus_p = (p + q) + p;
 
-        assert_eq!(p + q, q + p);
-        assert_eq!((p + q) + r, p + (q + r));
-        assert_eq!(double_p_add_q, p_plus_q_plus_p);
+            assert_eq!(p + q, q + p);
+            assert_eq!((p + q) + r, p + (q + r));
+            assert_eq!(double_p_add_q, p_plus_q_plus_p);
+        }
     }
 }

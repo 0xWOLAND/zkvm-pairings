@@ -214,90 +214,32 @@ impl<C: Curve> Fp6<C> {
         self.c0.is_one() & self.c1.is_zero() & self.c2.is_zero()
     }
 
-    /// Returns `c = self * b`.
-    ///
-    /// Implements the full-tower interleaving strategy from
-    /// [ePrint 2022-376](https://eprint.iacr.org/2022/367).
     #[inline]
-    pub fn mul_interleaved(&self, b: &Self) -> Self {
-        // The intuition for this algorithm is that we can look at F_p^6 as a direct
-        // extension of F_p^2, and express the overall operations down to the base field
-        // F_p instead of only over F_p^2. This enables us to interleave multiplications
-        // and reductions, ensuring that we don't require double-width intermediate
-        // representations (with around twice as many limbs as F_p elements).
-
-        // We want to express the multiplication c = a x b, where a = (a_0, a_1, a_2) is
-        // an element of F_p^6, and a_i = (a_i,0, a_i,1) is an element of F_p^2. The fully
-        // expanded multiplication is given by (2022-376 §5):
-        //
-        //   c_0,0 = a_0,0 b_0,0 - a_0,1 b_0,1 + a_1,0 b_2,0 - a_1,1 b_2,1 + a_2,0 b_1,0 - a_2,1 b_1,1
-        //                                     - a_1,0 b_2,1 - a_1,1 b_2,0 - a_2,0 b_1,1 - a_2,1 b_1,0.
-        //         = a_0,0 b_0,0 - a_0,1 b_0,1 + a_1,0 (b_2,0 - b_2,1) - a_1,1 (b_2,0 + b_2,1)
-        //                                     + a_2,0 (b_1,0 - b_1,1) - a_2,1 (b_1,0 + b_1,1).
-        //
-        //   c_0,1 = a_0,0 b_0,1 + a_0,1 b_0,0 + a_1,0 b_2,1 + a_1,1 b_2,0 + a_2,0 b_1,1 + a_2,1 b_1,0
-        //                                     + a_1,0 b_2,0 - a_1,1 b_2,1 + a_2,0 b_1,0 - a_2,1 b_1,1.
-        //         = a_0,0 b_0,1 + a_0,1 b_0,0 + a_1,0(b_2,0 + b_2,1) + a_1,1(b_2,0 - b_2,1)
-        //                                     + a_2,0(b_1,0 + b_1,1) + a_2,1(b_1,0 - b_1,1).
-        //
-        //   c_1,0 = a_0,0 b_1,0 - a_0,1 b_1,1 + a_1,0 b_0,0 - a_1,1 b_0,1 + a_2,0 b_2,0 - a_2,1 b_2,1
-        //                                                                 - a_2,0 b_2,1 - a_2,1 b_2,0.
-        //         = a_0,0 b_1,0 - a_0,1 b_1,1 + a_1,0 b_0,0 - a_1,1 b_0,1 + a_2,0(b_2,0 - b_2,1)
-        //                                                                 - a_2,1(b_2,0 + b_2,1).
-        //
-        //   c_1,1 = a_0,0 b_1,1 + a_0,1 b_1,0 + a_1,0 b_0,1 + a_1,1 b_0,0 + a_2,0 b_2,1 + a_2,1 b_2,0
-        //                                                                 + a_2,0 b_2,0 - a_2,1 b_2,1
-        //         = a_0,0 b_1,1 + a_0,1 b_1,0 + a_1,0 b_0,1 + a_1,1 b_0,0 + a_2,0(b_2,0 + b_2,1)
-        //                                                                 + a_2,1(b_2,0 - b_2,1).
-        //
-        //   c_2,0 = a_0,0 b_2,0 - a_0,1 b_2,1 + a_1,0 b_1,0 - a_1,1 b_1,1 + a_2,0 b_0,0 - a_2,1 b_0,1.
-        //   c_2,1 = a_0,0 b_2,1 + a_0,1 b_2,0 + a_1,0 b_1,1 + a_1,1 b_1,0 + a_2,0 b_0,1 + a_2,1 b_0,0.
-        //
-        // Each of these is a "sum of products", which we can compute efficiently.
-
-        let b10_p_b11 = b.c1.c0 + b.c1.c1;
-        let b10_m_b11 = b.c1.c0 - b.c1.c1;
-        let b20_p_b21 = b.c2.c0 + b.c2.c1;
-        let b20_m_b21 = b.c2.c0 - b.c2.c1;
-
-        Fp6 {
-            c0: Fp2::new(
-                self.c0.c0 * b.c0.c0 - self.c0.c1 * b.c0.c1 + self.c1.c0 * b20_m_b21
-                    - self.c1.c1 * b20_p_b21
-                    + self.c2.c0 * b10_m_b11
-                    - self.c2.c1 * b10_p_b11,
-                self.c0.c0 * b.c0.c1
-                    + self.c0.c1 * b.c0.c0
-                    + self.c1.c0 * b20_p_b21
-                    + self.c1.c1 * b20_m_b21
-                    + self.c2.c0 * b10_p_b11
-                    + self.c2.c1 * b10_m_b11,
-            ),
-            c1: Fp2::new(
-                self.c0.c0 * b.c1.c0 - self.c0.c1 * b.c1.c1 + self.c1.c0 * b.c0.c0
-                    - self.c1.c1 * b.c0.c1
-                    + self.c2.c0 * b20_m_b21
-                    - self.c2.c1 * b20_p_b21,
-                self.c0.c0 * b.c1.c1
-                    + self.c0.c1 * b.c1.c0
-                    + self.c1.c0 * b.c0.c1
-                    + self.c1.c1 * b.c0.c0
-                    + self.c2.c0 * b20_p_b21
-                    + self.c2.c1 * b20_m_b21,
-            ),
-            c2: Fp2::new(
-                self.c0.c0 * b.c2.c0 - self.c0.c1 * b.c2.c1 + self.c1.c0 * b.c1.c0
-                    - self.c1.c1 * b.c1.c1
-                    + self.c2.c0 * b.c0.c0
-                    - self.c2.c1 * b.c0.c1,
-                self.c0.c0 * b.c2.c1
-                    + self.c0.c1 * b.c2.c0
-                    + self.c1.c0 * b.c1.c1
-                    + self.c1.c1 * b.c1.c0
-                    + self.c2.c0 * b.c0.c1
-                    + self.c2.c1 * b.c0.c0,
-            ),
-        }
+    pub fn mul_interleaved(&self, rhs: &Self) -> Self {
+        let t0 = &self.c0 * &rhs.c0;
+        let t1 = &self.c1 * &rhs.c1;
+        let t2 = &self.c2 * &rhs.c2;
+        let c0 = &self.c1 + &self.c2;
+        let tmp = &rhs.c1 + &rhs.c2;
+        let c0 = c0 * tmp;
+        let tmp = t2 + t1;
+        let c0 = c0 - tmp;
+        let c0 = c0.mul_by_nonresidue();
+        let c0 = c0 + t0;
+        let c1 = &self.c0 + &self.c1;
+        let tmp = &rhs.c0 + &rhs.c1;
+        let c1 = c1 * tmp;
+        let tmp = t0 + t1;
+        let c1 = c1 - tmp;
+        let tmp = t2.mul_by_nonresidue();
+        let c1 = c1 + tmp;
+        let tmp = &self.c0 + &self.c2;
+        let c2 = &rhs.c0 + &rhs.c2;
+        let c2 = c2 * tmp;
+        let tmp = t0 + t2;
+        let c2 = c2 - tmp;
+        let c2 = c2 + t1;
+        Fp6::new(c0, c1, c2)
     }
 
     pub fn div(&self, rhs: &Self) -> Self {
@@ -610,7 +552,7 @@ mod test {
                     0x0303_cb98_b166_2daa,
                     0xd931_10aa_0a62_1d5a,
                     0xbfa9_820c_5be4_a468,
-                    0x0ba3_643e_cb05_a348,
+                    0x0ba3_643e_cc05_a348,
                     0xdc35_34bb_1f1c_25a6,
                     0x06c3_05bb_19c0_e1c1,
                 ]),
@@ -648,7 +590,7 @@ mod test {
                     0x0739_6b86_c6ef_24e8,
                     0xbd76_e2fd_b1bf_c820,
                     0x6afe_a7f6_de94_d0d5,
-                    0x1099_4b0c_5744_c040,
+                    0x1099_4c0c_5744_c040,
                 ]),
             ),
         );
