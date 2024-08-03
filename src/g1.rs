@@ -137,10 +137,6 @@ impl<C: Curve> G1Affine<C> {
         let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
         let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
 
-        println!("compression_flag_set: {}", compression_flag_set);
-        println!("infinity_flag_set: {}", infinity_flag_set);
-        println!("sort_flag_set: {}", sort_flag_set);
-
         // Attempt to obtain the x-coordinate
         let x = {
             let mut tmp = [0; 48];
@@ -149,37 +145,43 @@ impl<C: Curve> G1Affine<C> {
             // Mask away the flag bits
             tmp[0] &= 0b0001_1111;
 
-            Some(Fp::from_bytes(&tmp))
+            Fp::from_bytes(&tmp)
         };
 
-        x.and_then(|x| {
-            if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
-                // Infinity flag is set and x-coordinate is zero
-                Some(G1Affine::identity())
-            } else if !infinity_flag_set && compression_flag_set {
-                // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
-                let y_result = ((x.square() * x) + Fp::<C>::from_raw_unchecked(C::B)).sqrt();
-                println!("x: {:?}", x);
-                println!("y_result: {:?}", y_result);
+        // x.and_then(|x| {
+        if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
+            // Infinity flag is set and x-coordinate is zero
+            Some(G1Affine::identity())
+        } else if !infinity_flag_set && compression_flag_set {
+            // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
+            let y_result = ((x.square() * x) + Fp::<C>::from_raw_unchecked(C::B)).sqrt();
+            // println!("x: {:?}", x);
+            // println!("y_result: {:?}", y_result);
 
-                y_result.map(|y| {
-                    // Switch to the correct y-coordinate if necessary
-                    let y = if y.is_lexicographically_largest() ^ sort_flag_set {
-                        -y
-                    } else {
-                        y
-                    };
+            y_result.map(|y| {
+                // Switch to the correct y-coordinate if necessary
+                // println!(
+                //     "y lexicographically largest: {:?}",
+                //     y.is_lexicographically_largest()
+                // );
+                let y = if !(y.is_lexicographically_largest() ^ sort_flag_set) {
+                    y
+                } else {
+                    -y
+                };
 
-                    G1Affine {
-                        x,
-                        y,
-                        is_infinity: infinity_flag_set,
-                    }
-                })
-            } else {
-                None
-            }
-        })
+                // println!("uncompressed y: {:?}", y);
+
+                G1Affine {
+                    x,
+                    y,
+                    is_infinity: infinity_flag_set,
+                }
+            })
+        } else {
+            None
+        }
+        // })
     }
 }
 
@@ -200,23 +202,23 @@ impl<'a, 'b, C: Curve> Mul<&'b Fr<C>> for &'a G1Affine<C> {
 
     #[inline]
     fn mul(self, other: &'b Fr<C>) -> G1Affine<C> {
-        let mut xself = G1Affine::<C>::identity();
-        let mut acc = *self;
+        let mut acc = G1Affine::<C>::identity();
 
         for bit in other
             .0
             .iter()
-            .flat_map(|&x| (0..64).map(move |i| (x >> i) & 1 == 1))
+            .rev()
+            .flat_map(|&x| (0..64).rev().map(move |i| (x >> i) & 1 == 1))
             .skip(1)
         {
             acc = acc.double();
 
             if bit {
-                xself += &acc;
+                acc += self;
             }
         }
 
-        xself
+        acc
     }
 }
 
@@ -434,6 +436,18 @@ mod test {
             assert_eq!(p + q, q + p);
             assert_eq!((p + q) + r, p + (q + r));
             assert_eq!(double_p_add_q, p_plus_q_plus_p);
+        }
+    }
+    #[test]
+    fn test_scalar_multiplication() {
+        let mut rng = rand::thread_rng();
+        for _ in 0..10 {
+            let r: u64 = rng.gen::<u64>() % 100;
+            let k = Fr::<Bls12381Curve>::from(r);
+            let a = G1Affine::<Bls12381Curve>::random(&mut rng);
+            let lhs = &a * &k;
+            let rhs = (0..r).fold(G1Affine::<Bls12381Curve>::identity(), |acc, _| acc + &a);
+            assert_eq!(lhs, rhs);
         }
     }
 }

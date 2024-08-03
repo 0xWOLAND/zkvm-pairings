@@ -1,3 +1,4 @@
+use crate::common::Bls12381Curve;
 use crate::common::Curve;
 use crate::fp::*;
 use crate::fp2::*;
@@ -5,7 +6,9 @@ use crate::fp6::*;
 
 use core::fmt;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use std::str::FromStr;
 
+use num_bigint::BigUint;
 use rand::RngCore;
 #[cfg(feature = "pairings")]
 use rand_core::RngCore;
@@ -107,7 +110,7 @@ impl<C: Curve> Fp12<C> {
         res
     }
 
-    pub(crate) fn random(mut rng: impl RngCore) -> Self {
+    pub fn random(mut rng: impl RngCore) -> Self {
         Fp12 {
             c0: Fp6::<C>::random(&mut rng),
             c1: Fp6::<C>::random(&mut rng),
@@ -254,6 +257,9 @@ impl<C: Curve> Fp12<C> {
         res
     }
 
+    pub fn pow_vartime_extended_str(&self, by: &str) -> Self {
+        self.pow_vartime_extended(&BigUint::from_str(by).unwrap().to_u64_digits())
+    }
     /// Raises this element to p.
     #[inline(always)]
     pub fn frobenius_map(&self) -> Self {
@@ -270,6 +276,12 @@ impl<C: Curve> Fp12<C> {
                     0x0fd6_03fd_3cbd_5f4f,
                     0xc231_beb4_202c_0d1f,
                     0x1904_d3bf_02bb_0667,
+                    // 0x8d0775ed92235fb8,
+                    // 0xf67ea53d63e7813d,
+                    // 0x7b2443d784bab9c4,
+                    // 0x0fd603fd3cbd5f4f,
+                    // 0xc231beb4202c0d1f,
+                    // 0x1904d3bf02bb0667,
                 ]),
                 Fp::from_raw_unchecked([
                     0x2cf7_8a12_6ddc_4af3,
@@ -278,6 +290,12 @@ impl<C: Curve> Fp12<C> {
                     0x54a1_4787_b6c7_b36f,
                     0x88e9_e902_231f_9fb8,
                     0x00fc_3e2b_36c4_e032,
+                    // 0x8d0775ed92235fb8,
+                    // 0xf67ea53d63e7813d,
+                    // 0x7b2443d784bab9c4,
+                    // 0x0fd603fd3cbd5f4f,
+                    // 0xc231beb4202c0d1f,
+                    // 0x1904d3bf02bb0667,
                 ]),
             ));
 
@@ -972,4 +990,27 @@ fn test_zeroize() {
     let mut a = Fp12::one();
     a.zeroize();
     assert!(bool::from(a.is_zero()));
+}
+
+#[test]
+fn test_frobenius() {
+    use rand::thread_rng;
+    for _ in 0..10 {
+        let a = Fp12::<Bls12381Curve>::random(&mut thread_rng());
+        assert_eq!(
+            a,
+            a.frobenius_map()
+                .frobenius_map()
+                .frobenius_map()
+                .frobenius_map()
+                .frobenius_map()
+                .frobenius_map()
+                .frobenius_map()
+                .frobenius_map()
+                .frobenius_map()
+                .frobenius_map()
+                .frobenius_map()
+                .frobenius_map()
+        );
+    }
 }

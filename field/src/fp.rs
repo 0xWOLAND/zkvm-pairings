@@ -181,6 +181,10 @@ impl<C: Curve> Fp<C> {
         let lhs = self.0;
         let rhs = (-self).0;
 
+        // println!("lexicographically largest");
+        // println!("lhs: {:?}", self);
+        // println!("rhs: {:?}", -self);
+
         for (l, r) in lhs.iter().zip(rhs.iter()).rev() {
             if l > r {
                 return true;
@@ -630,34 +634,5 @@ mod test {
                 assert_eq!(a_fp.is_lexicographically_largest(), a > a_inv);
             }
         }
-    }
-
-    #[test]
-    fn test_special_mul() {
-        let x = Fp::<Bls12381Curve>::from_raw_unchecked([
-            0xf1fbbbca6f146556,
-            0xd97b05f5c8d900ac,
-            0xc9dd98c56817e878,
-            0x74e56183bb247c8f,
-            0x7834a1246463e647,
-            0x13efc82d2017e9c5,
-        ]);
-        let y = Fp::<Bls12381Curve>::from_raw_unchecked([
-            0x5fcc527688b29a91,
-            0x7f13074c19935910,
-            0x8061fd6c7c4f63ab,
-            0x3ff8fd1247210d17,
-            0x46f892dfc6ed97d6,
-            0x0cde9cb75380d8a3,
-        ]);
-
-        let c0 = Fp::<Bls12381Curve>::from_raw_unchecked([
-            0xca07f3855ab48b7d,
-            0x6503cd6e1c4403fd,
-            0x56fc734cd655c204,
-            0x08b3e23363105a39,
-            0x6fcf81ef6ef0c514,
-            0x1169164989c84ac5,
-        ]);
     }
 }

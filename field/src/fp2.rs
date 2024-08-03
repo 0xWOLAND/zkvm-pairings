@@ -572,6 +572,16 @@ mod test {
             }
         }
     }
+
+    #[test]
+    fn test_frobenius() {
+        use rand::thread_rng;
+        for _ in 0..10 {
+            let f = Fp2::<Bls12381Curve>::random(&mut thread_rng());
+            let frob = f.frobenius_map().frobenius_map();
+            assert_eq!(f, frob);
+        }
+    }
 }
 
 #[cfg(feature = "zeroize")]

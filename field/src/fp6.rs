@@ -176,29 +176,47 @@ impl<C: Curve> Fp6<C> {
         // c1 = c1 * (u + 1)^((p - 1) / 3)
         let c1 = c1
             * Fp2::new(
-                Fp::from_raw_unchecked([
-                    0x2e01_ffff_fffe_fffe,
-                    0xde17_d813_620a_0002,
-                    0xddb3_a93b_e6f8_9688,
-                    0xba69_c607_6a0f_77ea,
-                    0x5f19_672f_df76_ce51,
-                    0x0000_0000_0000_0000,
-                ]),
                 Fp::zero(),
+                Fp::from_raw_unchecked([
+                    0x8bfd00000000aaac,
+                    0x409427eb4f49fffd,
+                    0x897d29650fb85f9b,
+                    0xaa0d857d89759ad4,
+                    0xec02408663d4de85,
+                    0x1a0111ea397fe699,
+                ]),
+                // Fp::from_raw_unchecked([
+                //     0x2e01_ffff_fffe_fffe,
+                //     0xde17_d813_620a_0002,
+                //     0xddb3_a93b_e6f8_9688,
+                //     0xba69_c607_6a0f_77ea,
+                //     0x5f19_672f_df76_ce51,
+                //     0x0000_0000_0000_0000,
+                // ]),
+                // Fp::zero(),
             );
 
         // c2 = c2 * (u + 1)^((2p - 2) / 3)
         let c2 = c2
             * Fp2::new(
                 Fp::from_raw_unchecked([
-                    0x8bfd_0000_0000_aaac,
-                    0x4094_27eb_4f49_fffd,
-                    0x897d_2965_0fb8_5f9b,
-                    0xaa0d_857d_8975_9ad4,
-                    0xec02_4086_63d4_de85,
-                    0x1a01_11ea_397f_e699,
+                    0x8bfd00000000aaad,
+                    0x409427eb4f49fffd,
+                    0x897d29650fb85f9b,
+                    0xaa0d857d89759ad4,
+                    0xec02408663d4de85,
+                    0x1a0111ea397fe699,
                 ]),
+                // Fp::one(),
                 Fp::zero(),
+                // Fp::from_raw_unchecked([
+                //     0xb9feffffffffaaaa,
+                //     0x1eabfffeb153ffff,
+                //     0x6730d2a0f6b0f624,
+                //     0x64774b84f38512bf,
+                //     0x4b1ba7b6434bacd7,
+                //     0x1a0111ea397fe69a,
+                // ]),
             );
 
         Fp6 { c0, c1, c2 }
@@ -740,5 +758,14 @@ mod test {
         let mut a = Fp6::one();
         a.zeroize();
         assert!(bool::from(a.is_zero()));
+    }
+
+    #[test]
+    fn test_frobenius() {
+        for _ in 0..10 {
+            let a = fp6_rand();
+            let b = (0..6).fold(a, |acc, _| acc.frobenius_map());
+            assert_eq!(a, b);
+        }
     }
 }
