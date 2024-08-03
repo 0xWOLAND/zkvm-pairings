@@ -13,4 +13,3 @@ rang = "0.1.1"
 subtle = "2.6.1"
 sp1-zkvm = { path = "../sp1/zkvm/entrypoint" }
 sp1-derive = { path = "../sp1/derive" }
-field = { path = "./field" }

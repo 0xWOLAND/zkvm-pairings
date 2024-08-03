@@ -1,35 +1,10 @@
-use field::{common::AffinePoint, fp::Fp, fp12::Fp12, fp2::Fp2, fp6::Fp6, fr::Fr, utils};
-use std::f32::NEG_INFINITY;
-const R: &str = "52435875175126190479447740508185965837690552500527637822603658699938581184513";
+use crate::{common::AffinePoint, fp::Fp, fp12::Fp12, fp2::Fp2, fp6::Fp6};
 
 use crate::{
     common::Curve,
     g1::G1Affine,
     g2::{G2Affine, G2Projective},
 };
-
-/// 6U+2 for in NAF form
-
-pub(crate) const SIX_U_PLUS_2_NAF: [i8; 65] = [
-    0, 0, 0, 1, 0, 1, 0, -1, 0, 0, 1, -1, 0, 0, 1, 0, 0, 1, 1, 0, -1, 0, 0, 1, 0, -1, 0, 0, 0, 0,
-    1, 1, 1, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 1, 0, 0, -1, 0, 0, 0, 1, 1, 0, -1, 0,
-    0, 1, 0, 1, 1,
-];
-
-#[derive(Clone, Copy)]
-pub(crate) struct LineEvaluation<C: Curve> {
-    pub(crate) x: Fp2<C>,
-    pub(crate) y: Fp2<C>,
-}
-
-impl<C: Curve> LineEvaluation<C> {
-    pub(crate) fn zero() -> Self {
-        LineEvaluation {
-            x: Fp2::<C>::zero(),
-            y: Fp2::<C>::zero(),
-        }
-    }
-}
 
 fn ell<C: Curve>(f: Fp12<C>, coeffs: &(Fp2<C>, Fp2<C>, Fp2<C>), p: &G1Affine<C>) -> Fp12<C> {
     let mut c0 = coeffs.0;
@@ -163,6 +138,8 @@ impl<C: Curve> From<G2Affine<C>> for G2Prepared<C> {
         let mut r = G2Projective::<C>::from_affine(q);
         let mut f = Fp12::<C>::one();
 
+        println!("cycle-tracker-start: miller-loop");
+
         let mut found_one = false;
         for i in (0..64).rev().map(|b| (((C::X >> 1) >> b) & 1) == 1) {
             if !found_one {
@@ -180,6 +157,7 @@ impl<C: Curve> From<G2Affine<C>> for G2Prepared<C> {
         }
         coeffs.push(doubling_step(&mut r));
 
+        println!("cycle-tracker-start: miller-loop");
         assert_eq!(coeffs.len(), 68);
 
         G2Prepared {
@@ -194,14 +172,11 @@ fn multi_miller_loop<C: Curve>(p: &[G1Affine<C>], q: &[G2Prepared<C>]) -> Fp12<C
     let mut found_one = false;
     let mut j = 0;
 
-    // println!("p: {:?}", p);
-
     for i in (0..64).rev().map(|b| (((C::X >> 1) >> b) & 1) == 1) {
         if !found_one {
             found_one = i;
             continue;
         }
-        // println!("f: {:?}", f);
         p.iter().zip(q.iter()).for_each(|(a, b)| {
             if !(a.is_identity() || b.is_infinity) {
                 f = ell(f, &b.coeffs[j], a);
@@ -210,7 +185,6 @@ fn multi_miller_loop<C: Curve>(p: &[G1Affine<C>], q: &[G2Prepared<C>]) -> Fp12<C
         j += 1;
 
         if i {
-            // println!("f: {:?}", f);
             p.iter().zip(q.iter()).for_each(|(a, b)| {
                 (!(a.is_identity() || b.is_infinity)).then(|| {
                     f = ell(f, &b.coeffs[j], a);
@@ -232,6 +206,7 @@ fn multi_miller_loop<C: Curve>(p: &[G1Affine<C>], q: &[G2Prepared<C>]) -> Fp12<C
 
 // https://eprint.iacr.org/2009/565.pdf
 pub fn final_exponentiation<C: Curve>(&f: &Fp12<C>) -> Fp12<C> {
+    println!("FINAL EXPONENTIATION");
     #[must_use]
     fn fp4_square<C: Curve>(a: Fp2<C>, b: Fp2<C>) -> (Fp2<C>, Fp2<C>) {
         let t0 = a.square();
@@ -311,8 +286,8 @@ pub fn final_exponentiation<C: Curve>(&f: &Fp12<C>) -> Fp12<C> {
         .frobenius_map()
         .frobenius_map()
         .frobenius_map();
-    let out = f
-        .invert()
+
+    f.invert()
         .map(|mut t1| {
             let mut t2 = t0 * t1;
             t1 = t2;
@@ -342,39 +317,7 @@ pub fn final_exponentiation<C: Curve>(&f: &Fp12<C>) -> Fp12<C> {
 
             f
         })
-        // We unwrap() because `MillerLoopResult` can only be constructed
-        // by a function within this crate, and we uphold the invariant
-        // that the enclosed value is nonzero.
-        .unwrap();
-    println!("out: {:?}", out);
-    out
-}
-
-#[cfg(not(target_os = "zkvm"))]
-fn residue_test<C: Curve>(f: &Fp12<C>) -> bool {
-    // use std::str::FromStr;
-
-    // use num_bigint::BigUint;
-
-    // use crate::witness::get_root_and_scaling_factor;
-
-    // let (root, w_full) = get_root_and_scaling_factor(f);
-    // let lam = BigUint::from_str(C::LAMBDA).unwrap();
-    // let lhs = f * w_full;
-    // let rhs = root.pow_vartime_extended(lam.to_u64_digits().as_slice());
-
-    // println!("lhs: {:?}", lhs);
-    // println!("rhs: {:?}", rhs);
-    // lhs == rhs
-
-    use crate::witness::check_rth_root as get_c;
-    get_c(f).pow_vartime_extended_str(&R) == *f
-}
-
-#[cfg(target_os = "zkvm")]
-fn residue_test<C: Curve>(f: &Fp12<C>) -> bool {
-    use crate::witness::check_rth_root as get_c;
-    get_c(f).pow_vartime_extended_str(&R) == *f
+        .unwrap()
 }
 
 pub fn verify_pairing<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> bool {
@@ -382,22 +325,15 @@ pub fn verify_pairing<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> bool {
         .iter()
         .map(|q| G2Prepared::from(*q))
         .collect::<Vec<G2Prepared<C>>>();
-    // println!("p: {:?}", p);
-    // println!("q: {:?}", q);
     let f = multi_miller_loop(p, &q);
-    // let buf = f.conjugate() / f;
-    // let f = buf.frobenius_map() * buf;
-    println!("f: {:?}", f);
-    let lhs = final_exponentiation(&f);
-    println!("final exponentiation: {:?}", lhs);
-    lhs == Fp12::<C>::one()
+    final_exponentiation(&f) == Fp12::<C>::one()
 }
 
 #[cfg(test)]
 mod test {
     use std::str::FromStr;
 
-    use field::common::Bls12381Curve;
+    use crate::{common::Bls12381Curve, fr::Fr};
     use num_bigint::BigUint;
     use rand::thread_rng;
 
@@ -417,16 +353,6 @@ mod test {
             let lhs = final_exponentiation(&f);
             let rhs = _final_exponentiation(&f);
             assert_eq!(lhs, rhs);
-        }
-    }
-
-    #[test]
-    fn test_residue_test() {
-        for _ in 0..10 {
-            let f = Fp12::<Bls12381Curve>::random(&mut thread_rng());
-            let f =
-                f.pow_vartime_extended(BigUint::from_str(R).unwrap().to_u64_digits().as_slice());
-            assert!(residue_test(&f));
         }
     }
 

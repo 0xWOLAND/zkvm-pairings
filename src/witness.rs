@@ -1,4 +1,4 @@
-use field::{common::Curve, fp12::Fp12};
+use zkvm_pairings::{common::Curve, fp12::Fp12};
 use num_bigint::BigUint;
 use std::str::FromStr;
 

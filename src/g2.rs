@@ -1,8 +1,8 @@
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use field::common::{AffinePoint, Curve};
-use field::fp::Fp;
-use field::{fp2::Fp2, fr::Fr};
+use crate::common::{AffinePoint, Curve};
+use crate::fp::Fp;
+use crate::{fp2::Fp2, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
 pub struct G2Affine<C: Curve> {
@@ -376,7 +376,7 @@ impl<C: Curve> G2Projective<C> {
 
 #[cfg(test)]
 mod test {
-    use field::common::Bls12381Curve;
+    use crate::common::Bls12381Curve;
     use rand::Rng;
 
     use super::*;
