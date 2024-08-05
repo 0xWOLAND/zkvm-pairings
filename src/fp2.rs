@@ -4,7 +4,7 @@ use rand_core::RngCore;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
-        use sp1_zkvm::syscalls::syscall_bls12381_fp2_mulmod;
+        use sp1_zkvm::syscalls::{syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_submod, syscall_bls12381_fp2_mulmod};
         use std::mem::transmute;
     }
 }
@@ -254,18 +254,63 @@ impl<C: Curve> Fp2<C> {
     }
 
     /// Adds another element to this element.
+    #[cfg(not(target_os = "zkvm"))]
     pub fn add(&self, rhs: &Fp2<C>) -> Fp2<C> {
         Fp2::new((&self.c0).add(&rhs.c0), (&self.c1).add(&rhs.c1))
     }
 
+    /// Adds another element to this element.
+    #[cfg(target_os = "zkvm")]
+    pub fn add(&self, rhs: &Fp2<C>) -> Fp2<C> {
+        unsafe {
+            let mut lhs = transmute::<Fp2<C>, [u32; 24]>(*self);
+            let rhs = transmute::<Fp2<C>, [u32; 24]>(*rhs);
+            syscall_bls12381_fp2_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
+            *transmute::<&mut [u32; 24], &Fp2<C>>(&mut lhs)
+        }
+    }
+
     /// Subtracts another element from this element.
+    #[cfg(not(target_os = "zkvm"))]
     pub fn sub(&self, rhs: &Fp2<C>) -> Fp2<C> {
         Fp2::new((&self.c0).sub(&rhs.c0), (&self.c1).sub(&rhs.c1))
     }
 
+    /// Subtracts another element from this element.
+    #[cfg(target_os = "zkvm")]
+    pub fn sub(&self, rhs: &Fp2<C>) -> Fp2<C> {
+        unsafe {
+            let mut lhs = transmute::<Fp2<C>, [u32; 24]>(*self);
+            let rhs = transmute::<Fp2<C>, [u32; 24]>(*rhs);
+            syscall_bls12381_fp2_submod(lhs.as_mut_ptr(), rhs.as_ptr());
+            *transmute::<&mut [u32; 24], &Fp2<C>>(&mut lhs)
+        }
+    }
+
     /// Negates this element.
-    pub const fn neg(&self) -> Fp2<C> {
+    #[cfg(not(target_os = "zkvm"))]
+    pub fn neg(&self) -> Fp2<C> {
         Fp2::new((&self.c0).neg(), (&self.c1).neg())
+    }
+
+    /// Negates this element.
+    #[cfg(target_os = "zkvm")]
+    pub fn neg(&self) -> Fp2<C> {
+        unsafe {
+            let rhs = transmute::<[u64; 6], [u32; 12]>(C::MODULUS);
+            let rhs_ptr = rhs.as_ptr();
+
+            let mut lhs_c0 = transmute::<Fp<C>, [u32; 12]>(self.c0);
+            syscall_bls12381_fp2_submod(lhs_c0.as_mut_ptr(), rhs_ptr);
+
+            let mut lhs_c1 = transmute::<Fp<C>, [u32; 12]>(self.c1);
+            syscall_bls12381_fp2_submod(lhs_c1.as_mut_ptr(), rhs_ptr);
+
+            Fp2::new(
+                Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs_c0)),
+                Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs_c1)),
+            )
+        }
     }
 
     /// Computes the square root of this element.

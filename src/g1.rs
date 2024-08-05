@@ -122,7 +122,18 @@ impl<C: Curve> G1Affine<C> {
     }
 
     fn mul_by_x(&self) -> Self {
-        self * Fr::from(C::X)
+        let mut xself = G1Affine::identity();
+        let mut x = C::X >> 1;
+        let mut tmp = *self;
+        while x != 0 {
+            tmp = tmp.double();
+
+            if x % 2 == 1 {
+                xself += tmp;
+            }
+            x >>= 1;
+        }
+        xself
     }
 
     fn is_torsion_free(&self) -> bool {

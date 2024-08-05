@@ -19,8 +19,8 @@ fn ell<C: Curve>(f: Fp12<C>, coeffs: &(Fp2<C>, Fp2<C>, Fp2<C>), p: &G1Affine<C>)
     f.mul_by_014(&coeffs.2, &c1, &c0)
 }
 
+// Adaptation of Algorithm 26, https://eprint.iacr.org/2010/354.pdf
 fn doubling_step<C: Curve>(r: &mut G2Projective<C>) -> (Fp2<C>, Fp2<C>, Fp2<C>) {
-    // Adaptation of Algorithm 26, https://eprint.iacr.org/2010/354.pdf
     let tmp0 = r.x.square();
     let tmp1 = r.y.square();
     let tmp2 = tmp1.square();
@@ -50,8 +50,8 @@ fn doubling_step<C: Curve>(r: &mut G2Projective<C>) -> (Fp2<C>, Fp2<C>, Fp2<C>) 
     (tmp0, tmp3, tmp6)
 }
 
+// Adaptation of Algorithm 27, https://eprint.iacr.org/2010./354.pdf
 fn addition_step<C: Curve>(r: &mut G2Projective<C>, q: &G2Affine<C>) -> (Fp2<C>, Fp2<C>, Fp2<C>) {
-    // Adaptation of Algorithm 27, https://eprint.iacr.org/2010./354.pdf
     let zsquared = r.z.square();
     let ysquared = q.y.square();
     let t0 = zsquared * q.x;
@@ -138,8 +138,6 @@ impl<C: Curve> From<G2Affine<C>> for G2Prepared<C> {
         let mut r = G2Projective::<C>::from_affine(q);
         let mut f = Fp12::<C>::one();
 
-        println!("cycle-tracker-start: miller-loop");
-
         let mut found_one = false;
         for i in (0..64).rev().map(|b| (((C::X >> 1) >> b) & 1) == 1) {
             if !found_one {
@@ -157,7 +155,6 @@ impl<C: Curve> From<G2Affine<C>> for G2Prepared<C> {
         }
         coeffs.push(doubling_step(&mut r));
 
-        println!("cycle-tracker-start: miller-loop");
         assert_eq!(coeffs.len(), 68);
 
         G2Prepared {
@@ -206,7 +203,6 @@ fn multi_miller_loop<C: Curve>(p: &[G1Affine<C>], q: &[G2Prepared<C>]) -> Fp12<C
 
 // https://eprint.iacr.org/2009/565.pdf
 pub fn final_exponentiation<C: Curve>(&f: &Fp12<C>) -> Fp12<C> {
-    println!("FINAL EXPONENTIATION");
     #[must_use]
     fn fp4_square<C: Curve>(a: Fp2<C>, b: Fp2<C>) -> (Fp2<C>, Fp2<C>) {
         let t0 = a.square();
@@ -321,12 +317,19 @@ pub fn final_exponentiation<C: Curve>(&f: &Fp12<C>) -> Fp12<C> {
 }
 
 pub fn verify_pairing<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> bool {
+    // println!("cycle-tracker-start: miller_loop");
     let q = q
         .iter()
         .map(|q| G2Prepared::from(*q))
         .collect::<Vec<G2Prepared<C>>>();
+    // println!("cycle-tracker-end: miller_loop");
+    // println!("cycle-tracker-start: multi_miller_loop");
     let f = multi_miller_loop(p, &q);
-    final_exponentiation(&f) == Fp12::<C>::one()
+    // println!("cycle-tracker-end: multi_miller_loop");
+    // println!("cycle-tracker-start: final_exponentiation");
+    let out = final_exponentiation(&f) == Fp12::<C>::one();
+    // println!("cycle-tracker-end: final_exponentiation");
+    out
 }
 
 #[cfg(test)]

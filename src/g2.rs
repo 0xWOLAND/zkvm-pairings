@@ -115,7 +115,6 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
         let slope = (x.square() * three) / (y * two);
         let x_new = slope.square() - x * two;
         let y_new = slope * (x - x_new) - y;
-
         Self {
             x: x_new,
             y: y_new,
@@ -139,7 +138,18 @@ impl<C: Curve> G2Affine<C> {
     }
 
     fn mul_by_x(&self) -> Self {
-        self * Fr::from(C::X)
+        let mut xself = G2Affine::identity();
+        let mut x = C::X >> 1;
+        let mut tmp = *self;
+        while x != 0 {
+            tmp = tmp.double();
+
+            if x % 2 == 1 {
+                xself += tmp;
+            }
+            x >>= 1;
+        }
+        xself
     }
 
     fn psi(&self) -> Self {

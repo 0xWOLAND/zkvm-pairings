@@ -11,7 +11,7 @@ use std::marker::PhantomData;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
-        use sp1_zkvm::syscalls::syscall_bls12381_fp_mulmod;
+        use sp1_zkvm::syscalls::{syscall_bls12381_fp_mulmod, syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod};
         use sp1_zkvm::lib::{io, unconstrained};
     }
 }
@@ -370,8 +370,6 @@ impl<C: Curve> Fp<C> {
 
     #[cfg(target_os = "zkvm")]
     pub fn add(&self, rhs: &Fp<C>) -> Fp<C> {
-        use sp1_zkvm::syscalls::syscall_bls12381_fp_addmod;
-
         unsafe {
             let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
             let rhs = transmute::<[u64; 6], [u32; 12]>(rhs.0);
@@ -381,8 +379,8 @@ impl<C: Curve> Fp<C> {
     }
 
     #[inline]
-    /// Returns the negation of this field element.
-    pub const fn neg(&self) -> Fp<C> {
+    #[cfg(not(target_os = "zkvm"))]
+    pub fn neg(&self) -> Fp<C> {
         let (d0, borrow) = sbb(C::MODULUS[0], self.0[0], 0);
         let (d1, borrow) = sbb(C::MODULUS[1], self.0[1], borrow);
         let (d2, borrow) = sbb(C::MODULUS[2], self.0[2], borrow);
@@ -406,12 +404,32 @@ impl<C: Curve> Fp<C> {
         ])
     }
 
+    #[cfg(target_os = "zkvm")]
+    pub fn neg(&self) -> Fp<C> {
+        unsafe {
+            let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
+            let rhs = transmute::<[u64; 6], [u32; 12]>(C::MODULUS);
+            syscall_bls12381_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
+            Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs))
+        }
+    }
+
     #[inline]
-    /// Squares this element.
+    #[cfg(not(target_os = "zkvm"))]
     pub fn sub(&self, rhs: &Fp<C>) -> Fp<C> {
         (&rhs.neg()).add(self)
     }
 
+    #[inline]
+    #[cfg(target_os = "zkvm")]
+    pub fn sub(&self, rhs: &Fp<C>) -> Fp<C> {
+        unsafe {
+            let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
+            let rhs = transmute::<[u64; 6], [u32; 12]>(rhs.0);
+            syscall_bls12381_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
+            Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs))
+        }
+    }
     #[inline]
     /// Multiplies two field elements
     #[cfg(not(target_os = "zkvm"))]
