@@ -1,3 +1,5 @@
+use sp1_zkvm::lib::unconstrained;
+
 use crate::{common::AffinePoint, fp::Fp, fp12::Fp12, fp2::Fp2, fp6::Fp6};
 
 use crate::{
@@ -254,7 +256,7 @@ pub fn final_exponentiation<C: Curve>(&f: &Fp12<C>) -> Fp12<C> {
 
         Fp12::new(Fp6::new(z0, z4, z3), Fp6::new(z2, z1, z5))
     }
-    #[must_use]
+
     fn cycolotomic_exp<C: Curve>(f: Fp12<C>) -> Fp12<C> {
         let x = C::X;
         let mut tmp = Fp12::<C>::one();
@@ -275,19 +277,21 @@ pub fn final_exponentiation<C: Curve>(&f: &Fp12<C>) -> Fp12<C> {
     }
 
     let mut f = f.clone();
-    let mut t0 = f
-        .frobenius_map()
-        .frobenius_map()
-        .frobenius_map()
-        .frobenius_map()
-        .frobenius_map()
-        .frobenius_map();
+    // let mut t0 = f
+    //     .frobenius_map()
+    //     .frobenius_map()
+    //     .frobenius_map()
+    //     .frobenius_map()
+    //     .frobenius_map()
+    //     .frobenius_map();
+    let mut t0 = f.nth_frobenius_map(6);
 
     f.invert()
         .map(|mut t1| {
             let mut t2 = t0 * t1;
             t1 = t2;
-            t2 = t2.frobenius_map().frobenius_map();
+            // t2 = t2.frobenius_map().frobenius_map();
+            t2 = t2.nth_frobenius_map(2);
             t2 *= t1;
             t1 = cyclotomic_square(t2).conjugate();
             let mut t3 = cycolotomic_exp(t2);
@@ -302,11 +306,13 @@ pub fn final_exponentiation<C: Curve>(&f: &Fp12<C>) -> Fp12<C> {
             t4 *= t5 * t2;
             t5 = t2.conjugate();
             t1 *= t2;
-            t1 = t1.frobenius_map().frobenius_map().frobenius_map();
+            // t1 = t1.frobenius_map().frobenius_map().frobenius_map();
+            t1 = t1.nth_frobenius_map(3);
             t6 *= t5;
             t6 = t6.frobenius_map();
             t3 *= t0;
-            t3 = t3.frobenius_map().frobenius_map();
+            // t3 = t3.frobenius_map().frobenius_map();
+            t3 = t3.nth_frobenius_map(2);
             t3 *= t1;
             t3 *= t6;
             f = t3 * t4;
@@ -317,18 +323,18 @@ pub fn final_exponentiation<C: Curve>(&f: &Fp12<C>) -> Fp12<C> {
 }
 
 pub fn verify_pairing<C: Curve>(p: &[G1Affine<C>], q: &[G2Affine<C>]) -> bool {
-    // println!("cycle-tracker-start: miller_loop");
+    println!("cycle-tracker-start: miller-loop");
     let q = q
         .iter()
         .map(|q| G2Prepared::from(*q))
         .collect::<Vec<G2Prepared<C>>>();
-    // println!("cycle-tracker-end: miller_loop");
-    // println!("cycle-tracker-start: multi_miller_loop");
+    println!("cycle-tracker-end: miller-loop");
+    println!("cycle-tracker-start: multi-miller-loop");
     let f = multi_miller_loop(p, &q);
-    // println!("cycle-tracker-end: multi_miller_loop");
-    // println!("cycle-tracker-start: final_exponentiation");
+    println!("cycle-tracker-end: multi-miller-loop");
+    println!("cycle-tracker-start: final-exponentiation");
     let out = final_exponentiation(&f) == Fp12::<C>::one();
-    // println!("cycle-tracker-end: final_exponentiation");
+    println!("cycle-tracker-end: final-exponentiation");
     out
 }
 

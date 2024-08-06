@@ -1,5 +1,3 @@
-use crate::common::Bls12381Curve;
-use crate::common::Curve;
 use crate::fp::*;
 use crate::fp2::*;
 use crate::fp6::*;
@@ -13,72 +11,293 @@ use rand::RngCore;
 #[cfg(feature = "pairings")]
 use rand_core::RngCore;
 
+pub trait Fp12Element: Fp6Element {
+    fn get_fp12_frobenius_coeffs(pow: usize) -> [Self; 2];
+}
+
+impl Fp12Element for Bls12381 {
+    fn get_fp12_frobenius_coeffs(pow: usize) -> [Self; 2] {
+        match pow % 12 {
+            0 => [Self::one(); 2],
+            1 => [
+                Self::from_raw_unchecked([
+                    0x8d0775ed92235fb8,
+                    0xf67ea53d63e7813d,
+                    0x7b2443d784bab9c4,
+                    0x0fd603fd3cbd5f4f,
+                    0xc231beb4202c0d1f,
+                    0x1904d3bf02bb0667,
+                ]),
+                Self::from_raw_unchecked([
+                    0x2cf78a126ddc4af3,
+                    0x282d5ac14d6c7ec2,
+                    0xec0c8ec971f63c5f,
+                    0x54a14787b6c7b36f,
+                    0x88e9e902231f9fb8,
+                    0x00fc3e2b36c4e032,
+                ]),
+            ],
+            2 => [
+                Self::from_raw_unchecked([
+                    0x2e01fffffffeffff,
+                    0xde17d813620a0002,
+                    0xddb3a93be6f89688,
+                    0xba69c6076a0f77ea,
+                    0x5f19672fdf76ce51,
+                    0x0000000000000000,
+                ]),
+                Self::zero(),
+            ],
+            3 => [
+                Self::from_raw_unchecked([
+                    0xf1ee7b04121bdea2,
+                    0x304466cf3e67fa0a,
+                    0xef396489f61eb45e,
+                    0x1c3dedd930b1cf60,
+                    0xe2e9c448d77a2cd9,
+                    0x135203e60180a68e,
+                ]),
+                Self::from_raw_unchecked([
+                    0xc81084fbede3cc09,
+                    0xee67992f72ec05f4,
+                    0x77f76e17009241c5,
+                    0x48395dabc2d3435e,
+                    0x6831e36d6bd17ffe,
+                    0x06af0e0437ff400b,
+                ]),
+            ],
+            4 => [
+                Self::from_raw_unchecked([
+                    0x2e01fffffffefffe,
+                    0xde17d813620a0002,
+                    0xddb3a93be6f89688,
+                    0xba69c6076a0f77ea,
+                    0x5f19672fdf76ce51,
+                    0x0000000000000000,
+                ]),
+                Self::zero(),
+            ],
+            5 => [
+                Self::from_raw_unchecked([
+                    0x1ee605167ff82995,
+                    0x5871c1908bd478cd,
+                    0xdb45f3536814f0bd,
+                    0x70df3560e77982d0,
+                    0x6bd3ad4afa99cc91,
+                    0x144e4211384586c1,
+                ]),
+                Self::from_raw_unchecked([
+                    0x9b18fae980078116,
+                    0xc63a3e6e257f8732,
+                    0x8beadf4d8e9c0566,
+                    0xf39816240c0b8fee,
+                    0xdf47fa6b48b1e045,
+                    0x05b2cfd9013a5fd8,
+                ]),
+            ],
+            6 => [
+                Self::from_raw_unchecked([
+                    0xb9feffffffffaaaa,
+                    0x1eabfffeb153ffff,
+                    0x6730d2a0f6b0f624,
+                    0x64774b84f38512bf,
+                    0x4b1ba7b6434bacd7,
+                    0x1a0111ea397fe69a,
+                ]),
+                Self::zero(),
+            ],
+            7 => [
+                Self::from_raw_unchecked([
+                    0x2cf78a126ddc4af3,
+                    0x282d5ac14d6c7ec2,
+                    0xec0c8ec971f63c5f,
+                    0x54a14787b6c7b36f,
+                    0x88e9e902231f9fb8,
+                    0x00fc3e2b36c4e032,
+                ]),
+                Self::from_raw_unchecked([
+                    0x8d0775ed92235fb8,
+                    0xf67ea53d63e7813d,
+                    0x7b2443d784bab9c4,
+                    0x0fd603fd3cbd5f4f,
+                    0xc231beb4202c0d1f,
+                    0x1904d3bf02bb0667,
+                ]),
+            ],
+            8 => [
+                Self::from_raw_unchecked([
+                    0x8bfd00000000aaac,
+                    0x409427eb4f49fffd,
+                    0x897d29650fb85f9b,
+                    0xaa0d857d89759ad4,
+                    0xec02408663d4de85,
+                    0x1a0111ea397fe699,
+                ]),
+                Self::zero(),
+            ],
+            9 => [
+                Self::from_raw_unchecked([
+                    0xc81084fbede3cc09,
+                    0xee67992f72ec05f4,
+                    0x77f76e17009241c5,
+                    0x48395dabc2d3435e,
+                    0x6831e36d6bd17ffe,
+                    0x06af0e0437ff400b,
+                ]),
+                Self::from_raw_unchecked([
+                    0xf1ee7b04121bdea2,
+                    0x304466cf3e67fa0a,
+                    0xef396489f61eb45e,
+                    0x1c3dedd930b1cf60,
+                    0xe2e9c448d77a2cd9,
+                    0x135203e60180a68e,
+                ]),
+            ],
+            10 => [
+                Self::from_raw_unchecked([
+                    0x8bfd00000000aaad,
+                    0x409427eb4f49fffd,
+                    0x897d29650fb85f9b,
+                    0xaa0d857d89759ad4,
+                    0xec02408663d4de85,
+                    0x1a0111ea397fe699,
+                ]),
+                Self::zero(),
+            ],
+            11 => [
+                Self::from_raw_unchecked([
+                    0x9b18fae980078116,
+                    0xc63a3e6e257f8732,
+                    0x8beadf4d8e9c0566,
+                    0xf39816240c0b8fee,
+                    0xdf47fa6b48b1e045,
+                    0x05b2cfd9013a5fd8,
+                ]),
+                Self::from_raw_unchecked([
+                    0x1ee605167ff82995,
+                    0x5871c1908bd478cd,
+                    0xdb45f3536814f0bd,
+                    0x70df3560e77982d0,
+                    0x6bd3ad4afa99cc91,
+                    0x144e4211384586c1,
+                ]),
+            ],
+        }
+    }
+}
+
+impl Fp12Element for Bn254 {
+    fn get_fp12_frobenius_coeffs(pow: usize) -> [Self; 2] {
+        match pow % 12 {
+            0 => [Self::one(); 2],
+            1 => [
+                Self::from_raw_unchecked([
+                    12653890742059813127,
+                    14585784200204367754,
+                    1278438861261381767,
+                    212598772761311868,
+                ]),
+                Self::from_raw_unchecked([
+                    11683091849979440498,
+                    14992204589386555739,
+                    15866167890766973222,
+                    1200023580730561873,
+                ]),
+            ],
+            2 => [
+                Self::from_raw_unchecked([
+                    14595462726357228530,
+                    17349508522658994025,
+                    1017833795229664280,
+                    299787779797702374,
+                ]),
+                Self::zero(),
+            ],
+            3 => [
+                Self::from_raw_unchecked([
+                    3914496794763385213,
+                    790120733010914719,
+                    7322192392869644725,
+                    581366264293887267,
+                ]),
+                Self::from_raw_unchecked([
+                    12817045492518885689,
+                    4440270538777280383,
+                    11178533038884588256,
+                    2767537931541304486,
+                ]),
+            ],
+            _ => unimplemented!(),
+        }
+    }
+}
+
 /// This represents an element $c_0 + c_1 w$ of $\mathbb{F}_{p^12} = \mathbb{F}_{p^6} / w^2 - v$.
-pub struct Fp12<C: Curve> {
-    pub c0: Fp6<C>,
-    pub c1: Fp6<C>,
+pub struct Fp12<F: Fp12Element> {
+    pub c0: Fp6<F>,
+    pub c1: Fp6<F>,
 }
 
-impl<C: Curve> From<Fp<C>> for Fp12<C> {
-    fn from(f: Fp<C>) -> Fp12<C> {
+impl<F: Fp12Element> From<F> for Fp12<F> {
+    fn from(f: F) -> Fp12<F> {
         Fp12 {
-            c0: Fp6::<C>::from(f),
-            c1: Fp6::<C>::from(f),
+            c0: Fp6::<F>::from(f),
+            c1: Fp6::<F>::from(f),
         }
     }
 }
 
-impl<C: Curve> From<Fp2<C>> for Fp12<C> {
-    fn from(f: Fp2<C>) -> Fp12<C> {
+impl<F: Fp12Element> From<Fp2<F>> for Fp12<F> {
+    fn from(f: Fp2<F>) -> Fp12<F> {
         Fp12 {
-            c0: Fp6::<C>::from(f),
-            c1: Fp6::<C>::zero(),
+            c0: Fp6::<F>::from(f),
+            c1: Fp6::<F>::zero(),
         }
     }
 }
 
-impl<C: Curve> From<Fp6<C>> for Fp12<C> {
-    fn from(f: Fp6<C>) -> Fp12<C> {
+impl<F: Fp12Element> From<Fp6<F>> for Fp12<F> {
+    fn from(f: Fp6<F>) -> Fp12<F> {
         Fp12 {
             c0: f,
-            c1: Fp6::<C>::zero(),
+            c1: Fp6::<F>::zero(),
         }
     }
 }
 
-impl<C: Curve> Eq for Fp12<C> {}
-impl<C: Curve> PartialEq for Fp12<C> {
-    fn eq(&self, other: &Fp12<C>) -> bool {
+impl<F: Fp12Element> Eq for Fp12<F> {}
+impl<F: Fp12Element> PartialEq for Fp12<F> {
+    fn eq(&self, other: &Fp12<F>) -> bool {
         self.c0 == other.c0 && self.c1 == other.c1
     }
 }
 
-impl<C: Curve> Copy for Fp12<C> {}
-impl<C: Curve> Clone for Fp12<C> {
+impl<F: Fp12Element> Copy for Fp12<F> {}
+impl<F: Fp12Element> Clone for Fp12<F> {
     #[inline]
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<C: Curve> Default for Fp12<C> {
+impl<F: Fp12Element> Default for Fp12<F> {
     fn default() -> Self {
-        Fp12::<C>::zero()
+        Fp12::<F>::zero()
     }
 }
 
 #[cfg(feature = "zeroize")]
-impl<C: Curve> zeroize::DefaultIsZeroes for Fp12 {}
+impl<F: Fp12Element> zeroize::DefaultIsZeroes for Fp12 {}
 
-impl<C: Curve> fmt::Debug for Fp12<C> {
+impl<F: Fp12Element> fmt::Debug for Fp12<F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} + ({:?})*w", self.c0, self.c1)
     }
 }
 
-impl<C: Curve> Fp12<C> {
+impl<F: Fp12Element> Fp12<F> {
     #[inline]
-    pub fn new(c0: Fp6<C>, c1: Fp6<C>) -> Self {
+    pub fn new(c0: Fp6<F>, c1: Fp6<F>) -> Self {
         Fp12 { c0, c1 }
     }
 
@@ -92,11 +311,11 @@ impl<C: Curve> Fp12<C> {
         Fp12::new(Fp6::one(), Fp6::zero())
     }
 
-    pub fn from_bytes(bytes: &[u8; 576]) -> Fp12<C> {
-        let c0 = Fp6::<C>::from_bytes(&bytes[..288].try_into().unwrap());
-        let c1 = Fp6::<C>::from_bytes(&bytes[288..].try_into().unwrap());
+    pub fn from_bytes(bytes: &[u8; 576]) -> Fp12<F> {
+        let c0 = Fp6::<F>::from_bytes(&bytes[..288].try_into().unwrap());
+        let c1 = Fp6::<F>::from_bytes(&bytes[288..].try_into().unwrap());
 
-        Fp12::<C>::new(c0, c1)
+        Fp12::<F>::new(c0, c1)
     }
 
     pub fn to_bytes(&self) -> [u8; 576] {
@@ -112,12 +331,12 @@ impl<C: Curve> Fp12<C> {
 
     pub fn random(mut rng: impl RngCore) -> Self {
         Fp12 {
-            c0: Fp6::<C>::random(&mut rng),
-            c1: Fp6::<C>::random(&mut rng),
+            c0: Fp6::<F>::random(&mut rng),
+            c1: Fp6::<F>::random(&mut rng),
         }
     }
 
-    pub fn mul_by_014(&self, c0: &Fp2<C>, c1: &Fp2<C>, c4: &Fp2<C>) -> Fp12<C> {
+    pub fn mul_by_014(&self, c0: &Fp2<F>, c1: &Fp2<F>, c4: &Fp2<F>) -> Fp12<F> {
         let aa = self.c0.mul_by_01(c0, c1);
         let bb = self.c1.mul_by_1(c4);
         let o = c1 + c4;
@@ -131,7 +350,7 @@ impl<C: Curve> Fp12<C> {
         Fp12 { c0, c1 }
     }
 
-    pub fn mul_14_by_14(d0: &Fp2<C>, d1: &Fp2<C>, c0: &Fp2<C>, c1: &Fp2<C>) -> [Fp2<C>; 5] {
+    pub fn mul_14_by_14(d0: &Fp2<F>, d1: &Fp2<F>, c0: &Fp2<F>, c1: &Fp2<F>) -> [Fp2<F>; 5] {
         let x0 = d0 * c0;
         let x1 = d1 * c1;
         let x04 = c0 + d0;
@@ -141,12 +360,12 @@ impl<C: Curve> Fp12<C> {
         let tmp = x1 + x0;
         let x01 = x01 - tmp;
         let x14 = c1 + d1;
-        let z_c0_b0 = Fp2::<C>::non_residue() + x0;
+        let z_c0_b0 = Fp2::<F>::non_residue() + x0;
 
         [z_c0_b0, x01, x1, x04, x14]
     }
 
-    fn cyclotomic_square(&self) -> Fp12<C> {
+    fn cyclotomic_square(&self) -> Fp12<F> {
         let t0 = &self.c1.c1.square();
         let t1 = &self.c0.c0.square();
         let t6 = (&self.c1.c1 + &self.c0.c0).square();
@@ -190,11 +409,11 @@ impl<C: Curve> Fp12<C> {
         Fp12::new(Fp6::new(z00, z01, z02), Fp6::new(z10, z11, z12))
     }
 
-    fn n_cyclotomic_square(&self, by: u64) -> Fp12<C> {
+    fn n_cyclotomic_square(&self, by: u64) -> Fp12<F> {
         (0..by).fold(*self, |acc, _| acc.cyclotomic_square())
     }
 
-    pub fn powt(&self) -> Fp12<C> {
+    pub fn powt(&self) -> Fp12<F> {
         let a = self.cyclotomic_square();
         let a = a * self;
         let a = a.n_cyclotomic_square(2);
@@ -210,7 +429,7 @@ impl<C: Curve> Fp12<C> {
         a.cyclotomic_square()
     }
 
-    pub fn div(&self, rhs: &Fp12<C>) -> Fp12<C> {
+    pub fn div(&self, rhs: &Fp12<F>) -> Fp12<F> {
         rhs.invert().unwrap() * self
     }
 
@@ -266,41 +485,21 @@ impl<C: Curve> Fp12<C> {
         let c0 = self.c0.frobenius_map();
         let c1 = self.c1.frobenius_map();
 
-        // c1 = c1 * (u + 1)^((p - 1) / 6)
-        let c1 = c1
-            * Fp6::from(Fp2::new(
-                Fp::from_raw_unchecked([
-                    0x8d07_75ed_9223_5fb8,
-                    0xf67e_a53d_63e7_813d,
-                    0x7b24_43d7_84ba_b9c4,
-                    0x0fd6_03fd_3cbd_5f4f,
-                    0xc231_beb4_202c_0d1f,
-                    0x1904_d3bf_02bb_0667,
-                    // 0x8d0775ed92235fb8,
-                    // 0xf67ea53d63e7813d,
-                    // 0x7b2443d784bab9c4,
-                    // 0x0fd603fd3cbd5f4f,
-                    // 0xc231beb4202c0d1f,
-                    // 0x1904d3bf02bb0667,
-                ]),
-                Fp::from_raw_unchecked([
-                    0x2cf7_8a12_6ddc_4af3,
-                    0x282d_5ac1_4d6c_7ec2,
-                    0xec0c_8ec9_71f6_3c5f,
-                    0x54a1_4787_b6c7_b36f,
-                    0x88e9_e902_231f_9fb8,
-                    0x00fc_3e2b_36c4_e032,
-                    // 0x8d0775ed92235fb8,
-                    // 0xf67ea53d63e7813d,
-                    // 0x7b2443d784bab9c4,
-                    // 0x0fd603fd3cbd5f4f,
-                    // 0xc231beb4202c0d1f,
-                    // 0x1904d3bf02bb0667,
-                ]),
-            ));
+        let frob_coeffs = F::get_fp12_frobenius_coeffs(1);
+        let c1 = c1 * Fp6::from(Fp2::new(frob_coeffs[0], frob_coeffs[1]));
 
         Fp12::new(c0, c1)
-        // self.pow_vartime(&MODULUS)
+    }
+
+    #[inline(always)]
+    pub(crate) fn nth_frobenius_map(&self, pow: usize) -> Self {
+        let c0 = self.c0.nth_frobenius_map(pow);
+        let c1 = self.c1.nth_frobenius_map(pow);
+
+        let frob_coeffs = F::get_fp12_frobenius_coeffs(pow);
+        let c1 = c1 * Fp6::from(Fp2::new(frob_coeffs[0], frob_coeffs[1]));
+
+        Fp12::new(c0, c1)
     }
 
     #[inline]
@@ -324,11 +523,11 @@ impl<C: Curve> Fp12<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fp12<C>> for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, 'b, F: Fp12Element> Mul<&'b Fp12<F>> for &'a Fp12<F> {
+    type Output = Fp12<F>;
 
     #[inline]
-    fn mul(self, other: &'b Fp12<C>) -> Self::Output {
+    fn mul(self, other: &'b Fp12<F>) -> Self::Output {
         let aa = self.c0 * other.c0;
         let bb = self.c1 * other.c1;
         let o = other.c0 + other.c1;
@@ -343,17 +542,17 @@ impl<'a, 'b, C: Curve> Mul<&'b Fp12<C>> for &'a Fp12<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Add<&'b Fp12<C>> for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, 'b, F: Fp12Element> Add<&'b Fp12<F>> for &'a Fp12<F> {
+    type Output = Fp12<F>;
 
     #[inline]
-    fn add(self, rhs: &'b Fp12<C>) -> Self::Output {
+    fn add(self, rhs: &'b Fp12<F>) -> Self::Output {
         Fp12::new(self.c0 + rhs.c0, self.c1 + rhs.c1)
     }
 }
 
-impl<'a, C: Curve> Neg for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, F: Fp12Element> Neg for &'a Fp12<F> {
+    type Output = Fp12<F>;
 
     #[inline]
     fn neg(self) -> Self::Output {
@@ -361,8 +560,8 @@ impl<'a, C: Curve> Neg for &'a Fp12<C> {
     }
 }
 
-impl<C: Curve> Neg for Fp12<C> {
-    type Output = Fp12<C>;
+impl<F: Fp12Element> Neg for Fp12<F> {
+    type Output = Fp12<F>;
 
     #[inline]
     fn neg(self) -> Self::Output {
@@ -370,647 +569,181 @@ impl<C: Curve> Neg for Fp12<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Sub<&'b Fp12<C>> for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, 'b, F: Fp12Element> Sub<&'b Fp12<F>> for &'a Fp12<F> {
+    type Output = Fp12<F>;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp12<C>) -> Self::Output {
+    fn sub(self, rhs: &'b Fp12<F>) -> Self::Output {
         Fp12::new(self.c0 - rhs.c0, self.c1 - rhs.c1)
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fp<C>> for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, 'b, F: Fp12Element> Mul<&'b F> for &'a Fp12<F> {
+    type Output = Fp12<F>;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp<C>) -> Fp12<C> {
+    fn mul(self, rhs: &'b F) -> Fp12<F> {
         Fp12::new(self.c0 * rhs, self.c1 * rhs)
     }
 }
 
-impl<'a, 'b, C: Curve> Div<&'b Fp12<C>> for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, 'b, F: Fp12Element> Div<&'b Fp12<F>> for &'a Fp12<F> {
+    type Output = Fp12<F>;
 
     #[inline]
-    fn div(self, rhs: &'b Fp12<C>) -> Fp12<C> {
+    fn div(self, rhs: &'b Fp12<F>) -> Fp12<F> {
         self.div(rhs)
     }
 }
 
-impl_binops_additive!(Fp12<C>, Fp12<C>);
-impl_binops_multiplicative!(Fp12<C>, Fp12<C>);
-impl_binops_multiplicative!(Fp12<C>, Fp<C>);
-impl_binops_divisible!(Fp12<C>, Fp12<C>);
 #[cfg(test)]
-mod test {
-    use rand::thread_rng;
-
-    use crate::common::Bls12381Curve;
-
+mod tests {
     use super::*;
+    use rand::Rng;
 
-    fn fp12_rand() -> Fp12<Bls12381Curve> {
+    macro_rules! fp12_tests {
+        ($curve:ident, $rand_fn:ident, $curve_test:ident) => {
+            mod $curve_test {
+                use super::*;
+
+                #[test]
+                fn test_equality() {
+                    let rng = &mut rand::thread_rng();
+                    for _ in 0..10 {
+                        let a = $rand_fn();
+                        let b = a;
+                        assert_eq!(a, b);
+                    }
+                }
+
+                #[test]
+                fn test_inequality() {
+                    for _ in 0..10 {
+                        let a = $rand_fn();
+                        let b = $rand_fn();
+                        if a != b {
+                            assert_ne!(a, b);
+                        }
+                    }
+                }
+
+                #[test]
+                fn test_addition_subtraction() {
+                    for _ in 0..10 {
+                        let a = $rand_fn();
+                        let b = $rand_fn();
+                        let c = $rand_fn();
+
+                        // commutative
+                        assert_eq!(a + b, b + a);
+                        assert_eq!(a + (b + c), (a + b) + c);
+
+                        // additive identity
+                        assert_eq!(a + Fp12::<$curve>::zero(), a);
+                        assert_eq!(a - Fp12::<$curve>::zero(), a);
+
+                        assert_eq!(Fp12::<$curve>::zero() - a, -a);
+                        assert_eq!(a - b, a + (-b));
+                        assert_eq!(a - b, a + (b * -Fp12::<$curve>::one()));
+
+                        assert_eq!(-a, Fp12::<$curve>::zero() - a);
+                        assert_eq!(-a, a * -Fp12::<$curve>::one());
+                    }
+                }
+
+                #[test]
+                fn test_multiplication() {
+                    for _ in 0..10 {
+                        let a = $rand_fn();
+                        let b = $rand_fn();
+                        let c = $rand_fn();
+
+                        // commutative
+                        assert_eq!(a * b, b * a);
+
+                        // associative
+                        assert_eq!(a * (b * c), (a * b) * c);
+
+                        // distributive
+                        assert_eq!(a * (b + c), a * b + a * c);
+                    }
+                }
+
+                #[test]
+                fn test_square_equality() {
+                    for _ in 0..10 {
+                        let a = $rand_fn();
+                        assert_eq!(a.square(), a * a);
+                    }
+                }
+
+                #[test]
+                fn test_inversion() {
+                    for _ in 0..10 {
+                        let a = $rand_fn();
+                        if !a.is_zero() {
+                            assert_eq!(a * a.invert().unwrap(), Fp12::<$curve>::one());
+                            assert_eq!(a.invert().unwrap().invert().unwrap(), a);
+                        }
+                    }
+                }
+
+                #[test]
+                fn test_frobenius() {
+                    for _ in 0..10 {
+                        let a = $rand_fn();
+                        let b = (0..12).fold(a, |acc, _| acc.frobenius_map());
+                        assert_eq!(a, b);
+                    }
+                }
+
+                #[test]
+                fn test_cyclotomic_square() {
+                    for _ in 0..10 {
+                        let a = $rand_fn();
+                        assert_eq!(a.cyclotomic_square(), a.n_cyclotomic_square(1));
+                        assert_eq!(
+                            a.cyclotomic_square().cyclotomic_square(),
+                            a.n_cyclotomic_square(2)
+                        );
+                    }
+                }
+            }
+        };
+    }
+
+    fn bls12381_fp12_rand() -> Fp12<Bls12381> {
+        let mut rng = rand::thread_rng();
         Fp12::new(
             Fp6::new(
-                Fp2::random(&mut thread_rng()),
-                Fp2::random(&mut thread_rng()),
-                Fp2::random(&mut thread_rng()),
+                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
             ),
             Fp6::new(
-                Fp2::random(&mut thread_rng()),
-                Fp2::random(&mut thread_rng()),
-                Fp2::random(&mut thread_rng()),
+                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
             ),
         )
     }
 
-    #[test]
-    fn test_inequality() {
-        for _ in 0..10 {
-            let a = fp12_rand();
-            let b = fp12_rand();
-
-            assert_ne!(a, b)
-        }
-    }
-
-    #[test]
-    fn test_addition_subtraction() {
-        for _ in 0..10 {
-            let a = fp12_rand();
-            let b = fp12_rand();
-            let c = fp12_rand();
-
-            // commutative
-            assert_eq!(a + b, b + a);
-            assert_eq!(a + (b + c), (a + b) + c);
-
-            // additive identity
-            assert_eq!(a + Fp12::zero(), a); // a + 0 = a
-            assert_eq!(a - Fp12::zero(), a); // subtraction identity
-
-            assert_eq!(Fp12::zero() - a, -a); // 0 - a = -a
-            assert_eq!(a - b, a + (-b)); // a - b = a + -b
-            assert_eq!(a - b, a + (b * -Fp12::one())); // a - b = a + b * -1
-
-            assert_eq!(-a, Fp12::zero() - a);
-            assert_eq!(-a, a * -Fp12::one());
-        }
-    }
-
-    #[test]
-    fn test_multiplication() {
-        for _ in 0..10 {
-            let a = fp12_rand();
-            let b = fp12_rand();
-            let c = fp12_rand();
-
-            // commutative
-            assert_eq!(a * b, b * a);
-
-            // associative
-            assert_eq!(a * (b * c), (a * b) * c);
-
-            // distributive
-            assert_eq!(a * (b + c), a * b + a * c);
-        }
-    }
-
-    #[test]
-    fn test_add_equality() {
-        for _ in 0..10 {
-            let a = fp12_rand();
-
-            assert_eq!(a * Fp::from(0), Fp12::zero());
-            assert_eq!(a * Fp::zero(), Fp12::zero());
-            assert_eq!(a * Fp::one(), a);
-            assert_eq!(a * Fp::from(1), a);
-            assert_eq!(a * Fp::from(2), a + a);
-            assert_eq!(a * Fp::from(3), a + a + a);
-            assert_eq!(a * Fp::from(4), a + a + a + a);
-        }
-    }
-
-    #[test]
-    fn test_square_equality() {
-        for _ in 0..10 {
-            let a = fp12_rand();
-            assert_eq!(a.square(), a * a);
-        }
-    }
-
-    #[test]
-    fn test_pow_equality() {
-        for _ in 0..10 {
-            let a = fp12_rand();
-            assert_eq!(a.pow_vartime(&[1, 0, 0, 0, 0, 0]), a);
-            assert_eq!(a.pow_vartime(&[2, 0, 0, 0, 0, 0]), a.square());
-            assert_eq!(a.pow_vartime(&[3, 0, 0, 0, 0, 0]), a.square() * a);
-            assert_eq!(a.pow_vartime(&[4, 0, 0, 0, 0, 0]), a.square().square());
-        }
-    }
-
-    #[test]
-    fn test_sqrt() {
-        // let sqr1 = Fp([300855555557, 0, 0, 0, 0, 0]).sqrt().unwrap();
-        // assert_eq!(format!("{:?}", sqr1), "0x025e51146a92917731d9d66d63f8c24ed8cae114e7c9d188e3eaa1e79bb19769f5877f9443e03723d9ed1eebbf92df98");
-
-        // assert!(Fp([72057594037927816, 0, 0, 0, 0, 0]).sqrt().is_err());
-    }
-
-    #[test]
-    fn test_div() {
-        for _ in 0..10 {
-            let a = fp12_rand();
-
-            // division by one
-            assert_eq!(a / Fp12::one(), a);
-            assert_eq!(a / a, Fp12::one());
-
-            // division by zero
-            assert_eq!(Fp12::zero() / a, Fp12::zero());
-
-            // division distributivity
-            let a = fp12_rand();
-            let b = fp12_rand();
-            let c = fp12_rand();
-
-            assert_eq!((a + b) / c, a / c + b / c);
-
-            // division and multiplication equality
-            let a = fp12_rand();
-            let b = fp12_rand();
-            assert_eq!(a / b, a * b.invert().unwrap());
-        }
-    }
-
-    #[test]
-    fn test_arithmetic() {
-        use crate::fp::*;
-        use crate::fp2::*;
-
-        let a = Fp12::new(
+    fn bn254_fp12_rand() -> Fp12<Bn254> {
+        let mut rng = rand::thread_rng();
+        Fp12::new(
             Fp6::new(
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x47f9_cb98_b1b8_2d58,
-                        0x5fe9_11eb_a3aa_1d9d,
-                        0x96bf_1b5f_4dd8_1db3,
-                        0x8100_d27c_c925_9f5b,
-                        0xafa2_0b96_7464_0eab,
-                        0x09bb_cea7_d8d9_497d,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x0303_cb98_b166_2daa,
-                        0xd931_10aa_0a62_1d5a,
-                        0xbfa9_820c_5be4_a468,
-                        0x0ba3_643e_cb05_a348,
-                        0xdc35_34bb_1f1c_25a6,
-                        0x06c3_05bb_19c0_e1c1,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x46f9_cb98_b162_d858,
-                        0x0be9_109c_f7aa_1d57,
-                        0xc791_bc55_fece_41d2,
-                        0xf84c_5770_4e38_5ec2,
-                        0xcb49_c1d9_c010_e60f,
-                        0x0acd_b8e1_58bf_e3c8,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x8aef_cb98_b15f_8306,
-                        0x3ea1_108f_e4f2_1d54,
-                        0xcf79_f69f_a1b7_df3b,
-                        0xe4f5_4aa1_d16b_1a3c,
-                        0xba5e_4ef8_6105_a679,
-                        0x0ed8_6c07_97be_e5cf,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0xcee5_cb98_b15c_2db4,
-                        0x7159_1082_d23a_1d51,
-                        0xd762_30e9_44a1_7ca4,
-                        0xd19e_3dd3_549d_d5b6,
-                        0xa972_dc17_01fa_66e3,
-                        0x12e3_1f2d_d6bd_e7d6,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0xad2a_cb98_b173_2d9d,
-                        0x2cfd_10dd_0696_1d64,
-                        0x0739_6b86_c6ef_24e8,
-                        0xbd76_e2fd_b1bf_c820,
-                        0x6afe_a7f6_de94_d0d5,
-                        0x1099_4b0c_5744_c040,
-                    ]),
-                ),
+                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
             ),
             Fp6::new(
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x47f9_cb98_b1b8_2d58,
-                        0x5fe9_11eb_a3aa_1d9d,
-                        0x96bf_1b5f_4dd8_1db3,
-                        0x8100_d27c_c925_9f5b,
-                        0xafa2_0b96_7464_0eab,
-                        0x09bb_cea7_d8d9_497d,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x0303_cb98_b166_2daa,
-                        0xd931_10aa_0a62_1d5a,
-                        0xbfa9_820c_5be4_a468,
-                        0x0ba3_643e_cb05_a348,
-                        0xdc35_34bb_1f1c_25a6,
-                        0x06c3_05bb_19c0_e1c1,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x46f9_cb98_b162_d858,
-                        0x0be9_109c_f7aa_1d57,
-                        0xc791_bc55_fece_41d2,
-                        0xf84c_5770_4e38_5ec2,
-                        0xcb49_c1d9_c010_e60f,
-                        0x0acd_b8e1_58bf_e3c8,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x8aef_cb98_b15f_8306,
-                        0x3ea1_108f_e4f2_1d54,
-                        0xcf79_f69f_a1b7_df3b,
-                        0xe4f5_4aa1_d16b_1a3c,
-                        0xba5e_4ef8_6105_a679,
-                        0x0ed8_6c07_97be_e5cf,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0xcee5_cb98_b15c_2db4,
-                        0x7159_1082_d23a_1d51,
-                        0xd762_30e9_44a1_7ca4,
-                        0xd19e_3dd3_549d_d5b6,
-                        0xa972_dc17_01fa_66e3,
-                        0x12e3_1f2d_d6bd_e7d6,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0xad2a_cb98_b173_2d9d,
-                        0x2cfd_10dd_0696_1d64,
-                        0x0739_6b86_c6ef_24e8,
-                        0xbd76_e2fd_b1bf_c820,
-                        0x6afe_a7f6_de94_d0d5,
-                        0x1099_4b0c_5744_c040,
-                    ]),
-                ),
+                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
             ),
-        );
-
-        let b = Fp12::new(
-            Fp6::new(
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x47f9_cb98_b1b8_2d58,
-                        0x5fe9_11eb_a3aa_1d9d,
-                        0x96bf_1b5f_4dd8_1db3,
-                        0x8100_d272_c925_9f5b,
-                        0xafa2_0b96_7464_0eab,
-                        0x09bb_cea7_d8d9_497d,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x0303_cb98_b166_2daa,
-                        0xd931_10aa_0a62_1d5a,
-                        0xbfa9_820c_5be4_a468,
-                        0x0ba3_643e_cb05_a348,
-                        0xdc35_34bb_1f1c_25a6,
-                        0x06c3_05bb_19c0_e1c1,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x46f9_cb98_b162_d858,
-                        0x0be9_109c_f7aa_1d57,
-                        0xc791_bc55_fece_41d2,
-                        0xf84c_5770_4e38_5ec2,
-                        0xcb49_c1d9_c010_e60f,
-                        0x0acd_b8e1_58bf_e348,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x8aef_cb98_b15f_8306,
-                        0x3ea1_108f_e4f2_1d54,
-                        0xcf79_f69f_a1b7_df3b,
-                        0xe4f5_4aa1_d16b_1a3c,
-                        0xba5e_4ef8_6105_a679,
-                        0x0ed8_6c07_97be_e5cf,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0xcee5_cb98_b15c_2db4,
-                        0x7159_1082_d23a_1d51,
-                        0xd762_30e9_44a1_7ca4,
-                        0xd19e_3dd3_549d_d5b6,
-                        0xa972_dc17_01fa_66e3,
-                        0x12e3_1f2d_d6bd_e7d6,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0xad2a_cb98_b173_2d9d,
-                        0x2cfd_10dd_0696_1d64,
-                        0x0739_6b86_c6ef_24e8,
-                        0xbd76_e2fd_b1bf_c820,
-                        0x6afe_a7f6_de94_d0d5,
-                        0x1099_4b0c_5744_c040,
-                    ]),
-                ),
-            ),
-            Fp6::new(
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x47f9_cb98_b1b8_2d58,
-                        0x5fe9_11eb_a3aa_1d9d,
-                        0x96bf_1b5f_4dd2_1db3,
-                        0x8100_d27c_c925_9f5b,
-                        0xafa2_0b96_7464_0eab,
-                        0x09bb_cea7_d8d9_497d,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x0303_cb98_b166_2daa,
-                        0xd931_10aa_0a62_1d5a,
-                        0xbfa9_820c_5be4_a468,
-                        0x0ba3_643e_cb05_a348,
-                        0xdc35_34bb_1f1c_25a6,
-                        0x06c3_05bb_19c0_e1c1,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x46f9_cb98_b162_d858,
-                        0x0be9_109c_f7aa_1d57,
-                        0xc791_bc55_fece_41d2,
-                        0xf84c_5770_4e38_5ec2,
-                        0xcb49_c1d9_c010_e60f,
-                        0x0acd_b8e1_58bf_e3c8,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x8aef_cb98_b15f_8306,
-                        0x3ea1_108f_e4f2_1d54,
-                        0xcf79_f69f_a117_df3b,
-                        0xe4f5_4aa1_d16b_1a3c,
-                        0xba5e_4ef8_6105_a679,
-                        0x0ed8_6c07_97be_e5cf,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0xcee5_cb98_b15c_2db4,
-                        0x7159_1082_d23a_1d51,
-                        0xd762_30e9_44a1_7ca4,
-                        0xd19e_3dd3_549d_d5b6,
-                        0xa972_dc17_01fa_66e3,
-                        0x12e3_1f2d_d6bd_e7d6,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0xad2a_cb98_b173_2d9d,
-                        0x2cfd_10dd_0696_1d64,
-                        0x0739_6b86_c6ef_24e8,
-                        0xbd76_e2fd_b1bf_c820,
-                        0x6afe_a7f6_de94_d0d5,
-                        0x1099_4b0c_5744_c040,
-                    ]),
-                ),
-            ),
-        );
-        // ... (previous definitions of a and b remain the same)
-
-        let c = Fp12::new(
-            Fp6::new(
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x47f9_cb98_71b8_2d58,
-                        0x5fe9_11eb_a3aa_1d9d,
-                        0x96bf_1b5f_4dd8_1db3,
-                        0x8100_d27c_c925_9f5b,
-                        0xafa2_0b96_7464_0eab,
-                        0x09bb_cea7_d8d9_497d,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x0303_cb98_b166_2daa,
-                        0xd931_10aa_0a62_1d5a,
-                        0xbfa9_820c_5be4_a468,
-                        0x0ba3_643e_cb05_a348,
-                        0xdc35_34bb_1f1c_25a6,
-                        0x06c3_05bb_19c0_e1c1,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x46f9_cb98_b162_d858,
-                        0x0be9_109c_f7aa_1d57,
-                        0x7791_bc55_fece_41d2,
-                        0xf84c_5770_4e38_5ec2,
-                        0xcb49_c1d9_c010_e60f,
-                        0x0acd_b8e1_58bf_e3c8,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x8aef_cb98_b15f_8306,
-                        0x3ea1_108f_e4f2_1d54,
-                        0xcf79_f69f_a1b7_df3b,
-                        0xe4f5_4aa1_d16b_133c,
-                        0xba5e_4ef8_6105_a679,
-                        0x0ed8_6c07_97be_e5cf,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0xcee5_cb98_b15c_2db4,
-                        0x7159_1082_d23a_1d51,
-                        0xd762_40e9_44a1_7ca4,
-                        0xd19e_3dd3_549d_d5b6,
-                        0xa972_dc17_01fa_66e3,
-                        0x12e3_1f2d_d6bd_e7d6,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0xad2a_cb98_b173_2d9d,
-                        0x2cfd_10dd_0696_1d64,
-                        0x0739_6b86_c6ef_24e8,
-                        0xbd76_e2fd_b1bf_c820,
-                        0x6afe_a7f6_de94_d0d5,
-                        0x1099_4b0c_1744_c040,
-                    ]),
-                ),
-            ),
-            Fp6::new(
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x47f9_cb98_b1b8_2d58,
-                        0x5fe9_11eb_a3aa_1d9d,
-                        0x96bf_1b5f_4dd8_1db3,
-                        0x8100_d27c_c925_9f5b,
-                        0xafa2_0b96_7464_0eab,
-                        0x09bb_cea7_d8d9_497d,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x0303_cb98_b166_2daa,
-                        0xd931_10aa_0a62_1d5a,
-                        0xbfa9_820c_5be4_a468,
-                        0x0ba3_643e_cb05_a348,
-                        0xdc35_34bb_1f1c_25a6,
-                        0x06c3_05bb_19c0_e1c1,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0x46f9_cb98_b162_d858,
-                        0x0be9_109c_f7aa_1d57,
-                        0xc791_bc55_fece_41d2,
-                        0xf84c_5770_4e38_5ec2,
-                        0xcb49_c1d3_c010_e60f,
-                        0x0acd_b8e1_58bf_e3c8,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0x8aef_cb98_b15f_8306,
-                        0x3ea1_108f_e4f2_1d54,
-                        0xcf79_f69f_a1b7_df3b,
-                        0xe4f5_4aa1_d16b_1a3c,
-                        0xba5e_4ef8_6105_a679,
-                        0x0ed8_6c07_97be_e5cf,
-                    ]),
-                ),
-                Fp2::new(
-                    Fp::from_raw_unchecked([
-                        0xcee5_cb98_b15c_2db4,
-                        0x7159_1082_d23a_1d51,
-                        0xd762_30e9_44a1_7ca4,
-                        0xd19e_3dd3_549d_d5b6,
-                        0xa972_dc17_01fa_66e3,
-                        0x12e3_1f2d_d6bd_e7d6,
-                    ]),
-                    Fp::from_raw_unchecked([
-                        0xad2a_cb98_b173_2d9d,
-                        0x2cfd_10dd_0696_1d64,
-                        0x0739_6b86_c6ef_24e8,
-                        0xbd76_e2fd_b1bf_c820,
-                        0x6afe_a7f6_de94_d0d5,
-                        0x1099_4b0c_5744_1040,
-                    ]),
-                ),
-            ),
-        );
-
-        // because a and b and c are similar to each other and
-        // I was lazy, this is just some arbitrary way to make
-        // them a little more different
-        let a: Fp12<Bls12381Curve> = a.square().invert().unwrap().square() + c;
-        let b: Fp12<Bls12381Curve> = b.square().invert().unwrap().square() + a;
-        let c: Fp12<Bls12381Curve> = c.square().invert().unwrap().square() + b;
-
-        assert_eq!(a.square(), a * a);
-        assert_eq!(b.square(), b * b);
-        assert_eq!(c.square(), c * c);
-
-        assert_eq!((a + b) * c.square(), (c * c * a) + (c * c * b));
-
-        assert_eq!(
-            a.invert().unwrap() * b.invert().unwrap(),
-            (a * b).invert().unwrap()
-        );
-        assert_eq!(a.invert().unwrap() * a, Fp12::one());
-
-        assert!(a != a.frobenius_map());
-        assert_eq!(
-            a,
-            a.frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-        );
+        )
     }
 
-    #[test]
-    fn test_cyclotomic_square() {
-        for _ in 0..10 {
-            let a = fp12_rand();
-            assert_eq!(a.cyclotomic_square(), a.n_cyclotomic_square(1));
-            assert_eq!(
-                a.cyclotomic_square().cyclotomic_square(),
-                a.n_cyclotomic_square(2)
-            );
-            assert_eq!(
-                a.cyclotomic_square()
-                    .cyclotomic_square()
-                    .cyclotomic_square(),
-                a.n_cyclotomic_square(3)
-            );
-            assert_eq!(
-                a.cyclotomic_square()
-                    .cyclotomic_square()
-                    .cyclotomic_square()
-                    .cyclotomic_square(),
-                a.n_cyclotomic_square(4)
-            );
-        }
-    }
-
-    #[test]
-    fn test_pow_vartime() {
-        for _ in 0..10 {
-            let a = fp12_rand();
-            let exp = (0..6).map(|_| rand::random::<u64>()).collect::<Vec<_>>();
-            let lhs = a.pow_vartime(&exp.clone().try_into().unwrap());
-            let rhs = a.pow_vartime_extended(exp.as_slice());
-
-            assert_eq!(lhs, rhs);
-        }
-    }
-
-    #[test]
-    fn test_from_bytes() {
-        // let bytes = Fp::<Bls12381Curve>::one().to_bytes_unsafe();
-        // println!("{:?}", bytes);
-        assert_eq!(
-            Fp2::<Bls12381Curve>::from_bytes(&Fp2::<Bls12381Curve>::to_bytes(
-                &Fp2::<Bls12381Curve>::one()
-            )),
-            Fp2::<Bls12381Curve>::one()
-        );
-    }
-}
-
-#[cfg(feature = "zeroize")]
-#[test]
-fn test_zeroize() {
-    use zeroize::Zeroize;
-
-    let mut a = Fp12::one();
-    a.zeroize();
-    assert!(bool::from(a.is_zero()));
-}
-
-#[test]
-fn test_frobenius() {
-    use rand::thread_rng;
-    for _ in 0..10 {
-        let a = Fp12::<Bls12381Curve>::random(&mut thread_rng());
-        assert_eq!(
-            a,
-            a.frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-                .frobenius_map()
-        );
-    }
+    fp12_tests!(Bls12381, bls12381_fp12_rand, bls12381_fp12_test);
+    fp12_tests!(Bn254, bn254_fp12_rand, bn254_fp12_test);
 }
