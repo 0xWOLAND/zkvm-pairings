@@ -3,7 +3,7 @@ use crate::fp2::*;
 use crate::fp6::*;
 
 use core::fmt;
-use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use core::ops::{Add, Div, Mul, Neg, Sub};
 use std::str::FromStr;
 
 use num_bigint::BigUint;
@@ -12,10 +12,14 @@ use rand::RngCore;
 use rand_core::RngCore;
 
 pub trait Fp12Element: Fp6Element {
+    type Fp12ElementType;
+    fn from_bytes_slice(bytes: &[u8]) -> Self::Fp12ElementType;
+    fn to_bytes_vec(value: &Self::Fp12ElementType) -> Vec<u8>;
     fn get_fp12_frobenius_coeffs(pow: usize) -> [Self; 2];
 }
 
 impl Fp12Element for Bls12381 {
+    type Fp12ElementType = Fp12<Bls12381>;
     fn get_fp12_frobenius_coeffs(pow: usize) -> [Self; 2] {
         match pow % 12 {
             0 => [Self::one(); 2],
@@ -182,11 +186,30 @@ impl Fp12Element for Bls12381 {
                     0x144e4211384586c1,
                 ]),
             ],
+            _ => unimplemented!(),
         }
+    }
+
+    fn from_bytes_slice(bytes: &[u8]) -> Self::Fp12ElementType {
+        let c0 = <Bls12381 as Fp6Element>::from_bytes_slice(&bytes[..288]);
+        let c1 = <Bls12381 as Fp6Element>::from_bytes_slice(&bytes[288..]);
+        Fp12::<Bls12381>::new(c0, c1)
+    }
+
+    fn to_bytes_vec(value: &Self::Fp12ElementType) -> Vec<u8> {
+        let mut res = [0u8; 576];
+        let c0 = <Bls12381 as Fp6Element>::to_bytes_vec(&value.c0);
+        let c1 = <Bls12381 as Fp6Element>::to_bytes_vec(&value.c1);
+
+        res[..288].copy_from_slice(&c0);
+        res[288..].copy_from_slice(&c1);
+
+        res.to_vec()
     }
 }
 
 impl Fp12Element for Bn254 {
+    type Fp12ElementType = Fp12<Bn254>;
     fn get_fp12_frobenius_coeffs(pow: usize) -> [Self; 2] {
         match pow % 12 {
             0 => [Self::one(); 2],
@@ -229,6 +252,23 @@ impl Fp12Element for Bn254 {
             ],
             _ => unimplemented!(),
         }
+    }
+
+    fn from_bytes_slice(bytes: &[u8]) -> Self::Fp12ElementType {
+        let c0 = <Bn254 as Fp6Element>::from_bytes_slice(&bytes[..288]);
+        let c1 = <Bn254 as Fp6Element>::from_bytes_slice(&bytes[288..]);
+        Fp12::<Bn254>::new(c0, c1)
+    }
+
+    fn to_bytes_vec(value: &Self::Fp12ElementType) -> Vec<u8> {
+        let mut res = [0u8; 576];
+        let c0 = <Bn254 as Fp6Element>::to_bytes_vec(&value.c0);
+        let c1 = <Bn254 as Fp6Element>::to_bytes_vec(&value.c1);
+
+        res[..288].copy_from_slice(&c0);
+        res[288..].copy_from_slice(&c1);
+
+        res.to_vec()
     }
 }
 
@@ -311,24 +351,6 @@ impl<F: Fp12Element> Fp12<F> {
         Fp12::new(Fp6::one(), Fp6::zero())
     }
 
-    pub fn from_bytes(bytes: &[u8; 576]) -> Fp12<F> {
-        let c0 = Fp6::<F>::from_bytes(&bytes[..288].try_into().unwrap());
-        let c1 = Fp6::<F>::from_bytes(&bytes[288..].try_into().unwrap());
-
-        Fp12::<F>::new(c0, c1)
-    }
-
-    pub fn to_bytes(&self) -> [u8; 576] {
-        let mut res = [0u8; 576];
-        let c0 = self.c0.to_bytes();
-        let c1 = self.c1.to_bytes();
-
-        res[..288].copy_from_slice(&c0);
-        res[288..].copy_from_slice(&c1);
-
-        res
-    }
-
     pub fn random(mut rng: impl RngCore) -> Self {
         Fp12 {
             c0: Fp6::<F>::random(&mut rng),
@@ -339,7 +361,7 @@ impl<F: Fp12Element> Fp12<F> {
     pub fn mul_by_014(&self, c0: &Fp2<F>, c1: &Fp2<F>, c4: &Fp2<F>) -> Fp12<F> {
         let aa = self.c0.mul_by_01(c0, c1);
         let bb = self.c1.mul_by_1(c4);
-        let o = c1 + c4;
+        let o = *c1 + *c4;
         let c1 = self.c1 + self.c0;
         let c1 = c1.mul_by_01(c0, &o);
         let c1 = c1 - aa - bb;
@@ -351,59 +373,59 @@ impl<F: Fp12Element> Fp12<F> {
     }
 
     pub fn mul_14_by_14(d0: &Fp2<F>, d1: &Fp2<F>, c0: &Fp2<F>, c1: &Fp2<F>) -> [Fp2<F>; 5] {
-        let x0 = d0 * c0;
-        let x1 = d1 * c1;
-        let x04 = c0 + d0;
-        let tmp = c0 + c1;
-        let x01 = d0 + d1;
+        let x0 = *d0 * *c0;
+        let x1 = *d1 * *c1;
+        let x04 = *c0 + *d0;
+        let tmp = *c0 + *c1;
+        let x01 = *d0 + *d1;
         let x01 = x01 * tmp;
         let tmp = x1 + x0;
         let x01 = x01 - tmp;
-        let x14 = c1 + d1;
+        let x14 = *c1 + *d1;
         let z_c0_b0 = Fp2::<F>::non_residue() + x0;
 
         [z_c0_b0, x01, x1, x04, x14]
     }
 
     fn cyclotomic_square(&self) -> Fp12<F> {
-        let t0 = &self.c1.c1.square();
-        let t1 = &self.c0.c0.square();
-        let t6 = (&self.c1.c1 + &self.c0.c0).square();
+        let t0 = self.c1.c1.square();
+        let t1 = self.c0.c0.square();
+        let t6 = (self.c1.c1 + self.c0.c0).square();
         let t6 = t6 - t0;
         let t6 = t6 - t1;
         let t2 = &self.c0.c2.square();
         let t3 = &self.c1.c0.square();
-        let t7 = (&self.c0.c2 + &self.c1.c0).square();
-        let t7 = t7 - t2;
-        let t7 = t7 - t3;
-        let t4 = &self.c1.c2.square();
-        let t5 = &self.c0.c1.square();
-        let t8 = (&self.c1.c2 + &self.c0.c1).square();
+        let t7 = (self.c0.c2 + self.c1.c0).square();
+        let t7 = t7 - *t2;
+        let t7 = t7 - *t3;
+        let t4 = self.c1.c2.square();
+        let t5 = self.c0.c1.square();
+        let t8 = (self.c1.c2 + self.c0.c1).square();
         let t8 = t8 - t4;
         let t8 = t8 - t5;
         let t8 = t8.mul_by_nonresidue();
         let t0 = t0.mul_by_nonresidue();
         let t0 = t0 + t1;
         let t2 = t2.mul_by_nonresidue();
-        let t2 = t2 + t3;
+        let t2 = t2 + *t3;
         let t4 = t4.mul_by_nonresidue();
         let t4 = t4 + t5;
-        let z00 = t0 - &self.c0.c0;
+        let z00 = t0 - self.c0.c0;
         let z00 = z00 + z00;
         let z00 = z00 + t0;
-        let z01 = t2 - &self.c0.c1;
+        let z01 = t2 - self.c0.c1;
         let z01 = z01 + z01;
         let z01 = z01 + t2;
-        let z02 = t4 - &self.c0.c2;
+        let z02 = t4 - self.c0.c2;
         let z02 = z02 + z02;
         let z02 = z02 + t4;
-        let z10 = t8 + &self.c1.c0;
+        let z10 = t8 + self.c1.c0;
         let z10 = z10 + z10;
         let z10 = z10 + t8;
-        let z11 = t6 + &self.c1.c1;
+        let z11 = t6 + self.c1.c1;
         let z11 = z11 + z11;
         let z11 = z11 + t6;
-        let z12 = t7 + &self.c1.c2;
+        let z12 = t7 + self.c1.c2;
         let z12 = z12 + z12;
         let z12 = z12 + t7;
         Fp12::new(Fp6::new(z00, z01, z02), Fp6::new(z10, z11, z12))
@@ -415,22 +437,22 @@ impl<F: Fp12Element> Fp12<F> {
 
     pub fn powt(&self) -> Fp12<F> {
         let a = self.cyclotomic_square();
-        let a = a * self;
+        let a = a * *self;
         let a = a.n_cyclotomic_square(2);
-        let a = a * self;
+        let a = a * *self;
         let a = a.n_cyclotomic_square(3);
-        let a = a * self;
+        let a = a * *self;
         let a = a.n_cyclotomic_square(9);
-        let a = a * self;
+        let a = a * *self;
         let a = a.n_cyclotomic_square(32);
-        let a = a * self;
+        let a = a * *self;
         let a = a.n_cyclotomic_square(15);
-        let a = a * self;
+        let a = a * *self;
         a.cyclotomic_square()
     }
 
     pub fn div(&self, rhs: &Fp12<F>) -> Fp12<F> {
-        rhs.invert().unwrap() * self
+        rhs.invert().unwrap() * *self
     }
 
     #[inline(always)]
@@ -455,7 +477,7 @@ impl<F: Fp12Element> Fp12<F> {
                 res = res.square();
 
                 if ((*e >> i) & 1) == 1 {
-                    res *= self;
+                    res = res * *self;
                 }
             }
         }
@@ -469,7 +491,7 @@ impl<F: Fp12Element> Fp12<F> {
                 res = res.square();
 
                 if ((*e >> i) & 1) == 1 {
-                    res *= self;
+                    res = res * *self;
                 }
             }
         }
@@ -523,11 +545,11 @@ impl<F: Fp12Element> Fp12<F> {
     }
 }
 
-impl<'a, 'b, F: Fp12Element> Mul<&'b Fp12<F>> for &'a Fp12<F> {
+impl<F: Fp12Element> Mul<Fp12<F>> for Fp12<F> {
     type Output = Fp12<F>;
 
     #[inline]
-    fn mul(self, other: &'b Fp12<F>) -> Self::Output {
+    fn mul(self, other: Fp12<F>) -> Self::Output {
         let aa = self.c0 * other.c0;
         let bb = self.c1 * other.c1;
         let o = other.c0 + other.c1;
@@ -542,11 +564,11 @@ impl<'a, 'b, F: Fp12Element> Mul<&'b Fp12<F>> for &'a Fp12<F> {
     }
 }
 
-impl<'a, 'b, F: Fp12Element> Add<&'b Fp12<F>> for &'a Fp12<F> {
+impl<F: Fp12Element> Add<Fp12<F>> for Fp12<F> {
     type Output = Fp12<F>;
 
     #[inline]
-    fn add(self, rhs: &'b Fp12<F>) -> Self::Output {
+    fn add(self, rhs: Fp12<F>) -> Self::Output {
         Fp12::new(self.c0 + rhs.c0, self.c1 + rhs.c1)
     }
 }
@@ -569,21 +591,22 @@ impl<F: Fp12Element> Neg for Fp12<F> {
     }
 }
 
-impl<'a, 'b, F: Fp12Element> Sub<&'b Fp12<F>> for &'a Fp12<F> {
+impl<F: Fp12Element> Sub<Fp12<F>> for Fp12<F> {
     type Output = Fp12<F>;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp12<F>) -> Self::Output {
+    fn sub(self, rhs: Fp12<F>) -> Self::Output {
         Fp12::new(self.c0 - rhs.c0, self.c1 - rhs.c1)
     }
 }
 
-impl<'a, 'b, F: Fp12Element> Mul<&'b F> for &'a Fp12<F> {
+impl<F: Fp12Element> Mul<F> for Fp12<F> {
     type Output = Fp12<F>;
 
     #[inline]
-    fn mul(self, rhs: &'b F) -> Fp12<F> {
-        Fp12::new(self.c0 * rhs, self.c1 * rhs)
+    fn mul(self, rhs: F) -> Fp12<F> {
+        let rhs = Fp12::from(rhs);
+        Fp12::new(self.c0 * rhs.c0, self.c1 * rhs.c1)
     }
 }
 

@@ -6,6 +6,8 @@ use core::mem::transmute;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use num_bigint::BigUint;
 use rand::RngCore;
+use sp1_zkvm::io;
+use sp1_zkvm::lib::unconstrained;
 use std::fmt::Debug;
 use std::marker::PhantomData;
 use std::str::FromStr;
@@ -213,7 +215,7 @@ cfg_if::cfg_if! {
 //         res
 //     }
 
-//     pub fn from_bytes_unsafe(bytes: &[u8; 48]) -> Fp<C> {
+//     pub fn from_bytes(bytes: &[u8; 48]) -> Fp<C> {
 //         unsafe { transmute::<[u8; 48], Fp<C>>(*bytes) }
 //     }
 
@@ -293,7 +295,7 @@ cfg_if::cfg_if! {
 //         let byte_vec = io::read_vec();
 //         let bytes: [u8; 48] = byte_vec.try_into().unwrap();
 //         unsafe {
-//             let sqrt = Fp::<C>::from_bytes_unsafe(&bytes);
+//             let sqrt = Fp::<C>::from_bytes(&bytes);
 //             Some(sqrt).filter(|s| s.square() == *self)
 //         }
 //     }
@@ -354,7 +356,7 @@ cfg_if::cfg_if! {
 //         let byte_vec = io::read_vec();
 //         let bytes: [u8; 48] = byte_vec.try_into().unwrap();
 //         unsafe {
-//             let inv = Fp::<C>::from_bytes_unsafe(&bytes);
+//             let inv = Fp::<C>::from_bytes(&bytes);
 //             Some(inv).filter(|_| !self.is_zero() && self * inv == Fp::one())
 //         }
 //     }
@@ -668,7 +670,7 @@ cfg_if::cfg_if! {
 //                 let mut a_bytes = a.to_bytes_le();
 //                 a_bytes.resize(48, 0);
 
-//                 let a_fp = Fp::<Bls12381Curve>::from_bytes_unsafe(&a_bytes.try_into().unwrap());
+//                 let a_fp = Fp::<Bls12381Curve>::from_bytes(&a_bytes.try_into().unwrap());
 
 //                 assert_eq!(a_fp.is_lexicographically_largest(), a > a_inv);
 //             }
@@ -727,6 +729,7 @@ pub trait FpElement:
     + Debug
     + Sync
     + Send
+    + From<u64>
 {
     const LIMBS: usize;
     const MODULUS: &'static [u64];
@@ -739,34 +742,56 @@ pub trait FpElement:
     fn is_one(&self) -> bool {
         self == &Self::one()
     }
-    fn _invert(&self) -> Self;
     fn invert(&self) -> Option<Self>;
-    fn _sqrt(&self) -> Self;
     fn sqrt(&self) -> Option<Self>;
     fn random(rng: impl RngCore) -> Self;
-    fn from_bytes(bytes: &[u8]) -> Self;
-    fn to_bytes(&self) -> Vec<u8>;
-    fn from_raw_unchecked(v: &[u64]) -> Self;
     fn pow_vartime(&self, by: &[u64]) -> Self;
-    fn is_lexicographically_largest(&self) -> bool {
-        let lhs = self.to_bytes();
-        let rhs = (-*self).to_bytes();
+    fn is_lexicographically_largest(&self) -> bool;
 
-        for (l, r) in lhs.iter().zip(rhs.iter()).rev() {
-            if l > r {
-                return true;
-            } else if l < r {
-                return false;
-            }
-        }
-        false
-    }
-    fn div(&self, rhs: &Self) -> Self {
-        assert!(!rhs.is_zero(), "Division by zero");
-        *self * rhs.invert().unwrap()
-    }
+    // fn div(&self, rhs: &Self) -> Self {
+    //     assert!(!rhs.is_zero(), "Division by zero");
+    //     *self * rhs.invert().unwrap()
+    // }
     fn square(&self) -> Self {
         *self * *self
+    }
+}
+
+impl Bls12381 {
+    pub(crate) const fn from_raw_unchecked(v: [u64; 6]) -> Self {
+        Bls12381(v)
+    }
+
+    pub(crate) fn from_bytes(bytes: &[u8; 48]) -> Self {
+        let bytes: [u8; 48] = (*bytes).try_into().unwrap();
+        unsafe { transmute::<[u8; 48], Bls12381>(bytes) }
+    }
+
+    pub(crate) fn to_bytes(&self) -> [u8; 48] {
+        unsafe { transmute::<Bls12381, [u8; 48]>(*self) }
+    }
+
+    pub(crate) fn _invert(&self) -> Self {
+        // Exponentiate by p - 2
+        self.pow_vartime(&[
+            0xb9fe_ffff_ffff_aaa9,
+            0x1eab_fffe_b153_ffff,
+            0x6730_d2a0_f6b0_f624,
+            0x6477_4b84_f385_12bf,
+            0x4b1b_a7b6_434b_acd7,
+            0x1a01_11ea_397f_e69a,
+        ])
+    }
+
+    pub(crate) fn _sqrt(&self) -> Self {
+        self.pow_vartime(&[
+            0xee7f_bfff_ffff_eaab,
+            0x07aa_ffff_ac54_ffff,
+            0xd9cc_34a8_3dac_3d89,
+            0xd91d_d2e1_3ce1_44af,
+            0x92c6_e9ed_90d2_eb35,
+            0x0680_447a_8e5f_f9a6,
+        ])
     }
 }
 
@@ -794,18 +819,6 @@ impl FpElement for Bls12381 {
         "4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787".to_string()
     }
 
-    fn _invert(&self) -> Self {
-        // Exponentiate by p - 2
-        self.pow_vartime(&[
-            0xb9fe_ffff_ffff_aaa9,
-            0x1eab_fffe_b153_ffff,
-            0x6730_d2a0_f6b0_f624,
-            0x6477_4b84_f385_12bf,
-            0x4b1b_a7b6_434b_acd7,
-            0x1a01_11ea_397f_e69a,
-        ])
-    }
-
     #[cfg(not(target_os = "zkvm"))]
     fn invert(&self) -> Option<Self> {
         Some(self._invert()).filter(|_| !self.is_zero())
@@ -818,27 +831,16 @@ impl FpElement for Bls12381 {
         // Compute the inverse using the zkvm syscall
         unconstrained! {
             let mut buf = [0u8; 48];
-            buf.copy_from_slice(&self._invert().to_bytes_unsafe());
+            buf.copy_from_slice(&self._invert().to_bytes());
             io::write(FD_HINT, &buf);
         }
 
         let byte_vec = io::read_vec();
         let bytes: [u8; 48] = byte_vec.try_into().unwrap();
         unsafe {
-            let inv = Self::from_bytes_unsafe(&bytes);
+            let inv = Self::from_bytes(&bytes);
             Some(inv).filter(|_| !self.is_zero() && self * inv == Fp::one())
         }
-    }
-
-    fn _sqrt(&self) -> Self {
-        self.pow_vartime(&[
-            0xee7f_bfff_ffff_eaab,
-            0x07aa_ffff_ac54_ffff,
-            0xd9cc_34a8_3dac_3d89,
-            0xd91d_d2e1_3ce1_44af,
-            0x92c6_e9ed_90d2_eb35,
-            0x0680_447a_8e5f_f9a6,
-        ])
     }
 
     #[cfg(not(target_os = "zkvm"))]
@@ -853,40 +855,23 @@ impl FpElement for Bls12381 {
         // Compute the square root using the zkvm syscall
         unconstrained! {
             let mut buf = [0u8; 48];
-            buf.copy_from_slice(&self._sqrt().to_bytes_unsafe());
+            buf.copy_from_slice(&self._sqrt().to_bytes());
             io::write(FD_HINT, &buf);
         }
 
         let byte_vec = io::read_vec();
         let bytes: [u8; 48] = byte_vec.try_into().unwrap();
-        unsafe {
-            let sqrt = Self::from_bytes_unsafe(&bytes);
-            Some(sqrt).filter(|s| s.square() == *self)
-        }
+        let sqrt = Self::from_bytes(&bytes);
+        Some(sqrt).filter(|s| s.square() == *self)
     }
 
     fn random(mut rng: impl RngCore) -> Self {
-        Self::from_raw_unchecked(
-            Self::MODULUS
-                .iter()
-                .map(|p| rng.next_u64() % p)
-                .collect::<Vec<u64>>()
-                .as_slice(),
-        )
-    }
+        let bytes = Self::MODULUS
+            .iter()
+            .map(|p| rng.next_u64() % p)
+            .collect::<Vec<u64>>();
 
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let bytes: [u8; 48] = bytes.try_into().unwrap();
-        unsafe { transmute::<[u8; 48], Bls12381>(bytes) }
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
-        unsafe { transmute::<Bls12381, [u8; 48]>(*self) }.to_vec()
-    }
-
-    fn from_raw_unchecked(v: &[u64]) -> Self {
-        let v: [u64; 6] = v.try_into().unwrap();
-        Bls12381(v)
+        Self::from_raw_unchecked(bytes.try_into().unwrap())
     }
 
     fn pow_vartime(&self, by: &[u64]) -> Self {
@@ -901,6 +886,20 @@ impl FpElement for Bls12381 {
             }
         }
         res
+    }
+
+    fn is_lexicographically_largest(&self) -> bool {
+        let lhs = self.to_bytes();
+        let rhs = (-*self).to_bytes();
+
+        for (l, r) in lhs.iter().zip(rhs.iter()).rev() {
+            if l > r {
+                return true;
+            } else if l < r {
+                return false;
+            }
+        }
+        false
     }
 }
 
@@ -921,14 +920,14 @@ impl<'a> Add<&'a Bls12381> for Bls12381 {
 
             let mut sum_slice = sum.to_u32_digits();
             sum_slice.resize(2 * LIMBS, 0);
-            Self::from_raw_unchecked(&transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(
                 sum_slice.try_into().unwrap(),
             ))
         }
     }
 
     #[cfg(target_os = "zkvm")]
-    fn add(&self, rhs: &Self) -> Self {
+    fn add(&self, rhs: &'a Self) -> Self {
         const LIMBS: usize = <Bls12381 as FpElement>::LIMBS;
 
         unsafe {
@@ -1001,7 +1000,7 @@ impl Mul for Bls12381 {
 
             let mut prod_slice = prod.to_u32_digits();
             prod_slice.resize(2 * LIMBS, 0);
-            Self::from_raw_unchecked(&transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(
                 prod_slice.try_into().unwrap(),
             ))
         }
@@ -1064,7 +1063,7 @@ impl Neg for Bls12381 {
             as u64)
             .wrapping_sub(1);
 
-        Self::from_raw_unchecked(&[
+        Self::from_raw_unchecked([
             d0 & mask,
             d1 & mask,
             d2 & mask,
@@ -1119,6 +1118,43 @@ impl DivAssign for Bls12381 {
     }
 }
 
+impl Bn254 {
+    pub(crate) const fn from_raw_unchecked(v: [u64; 4]) -> Self {
+        Bn254(v)
+    }
+
+    pub(crate) fn from_bytes(bytes: &[u8; 32]) -> Self {
+        let bytes: [u8; 32] = (*bytes).try_into().unwrap();
+        unsafe { transmute::<[u8; 32], Bn254>(bytes) }
+    }
+
+    pub(crate) fn to_bytes(&self) -> [u8; 32] {
+        unsafe { transmute::<Bn254, [u8; 32]>(*self) }
+    }
+
+    pub(crate) const fn fr_modulus() -> &'static str {
+        todo!()
+    }
+
+    pub(crate) fn _invert(&self) -> Self {
+        self.pow_vartime(&[
+            0x3c208c16d87cfd45,
+            0x97816a916871ca8d,
+            0xb85045b68181585d,
+            0x30644e72e131a029,
+        ])
+    }
+
+    pub(crate) fn _sqrt(&self) -> Self {
+        self.pow_vartime(&[
+            0x4f082305b61f3f52,
+            0x65e05aa45a1c72a3,
+            0x6e14116da0605617,
+            0xc19139cb84c680a,
+        ])
+    }
+}
+
 impl FpElement for Bn254 {
     const LIMBS: usize = 4;
     const MODULUS: &'static [u64] = &[
@@ -1140,13 +1176,26 @@ impl FpElement for Bn254 {
         "21888242871839275222246405745257275088696311157297823662689037894645226208583".to_string()
     }
 
-    fn _invert(&self) -> Self {
-        self.pow_vartime(&[
-            0x3c208c16d87cfd45,
-            0x97816a916871ca8d,
-            0xb85045b68181585d,
-            0x30644e72e131a029,
-        ])
+    #[cfg(not(target_os = "zkvm"))]
+    fn sqrt(&self) -> Option<Self> {
+        Some(self._sqrt()).filter(|s| s.square() == *self)
+    }
+
+    #[cfg(target_os = "zkvm")]
+    fn sqrt(&self) -> Option<Self> {
+        use sp1_zkvm::io::FD_HINT;
+
+        // Compute the square root using the zkvm syscall
+        unconstrained! {
+            let mut buf = [0u8; 32];
+            buf.copy_from_slice(&self._sqrt().to_bytes());
+            io::write(FD_HINT, &buf);
+        }
+
+        let byte_vec = io::read_vec();
+        let bytes: [u8; 32] = byte_vec.try_into().unwrap();
+        let sqrt = Self::from_bytes(&bytes);
+        Some(sqrt).filter(|s| s.square() == *self)
     }
 
     #[cfg(not(target_os = "zkvm"))]
@@ -1161,48 +1210,15 @@ impl FpElement for Bn254 {
         // Compute the inverse using the zkvm syscall
         unconstrained! {
             let mut buf = [0u8; 32];
-            buf.copy_from_slice(&self._invert().to_bytes_unsafe());
+            buf.copy_from_slice(&self._invert().to_bytes());
             io::write(FD_HINT, &buf);
         }
 
         let byte_vec = io::read_vec();
         let bytes: [u8; 32] = byte_vec.try_into().unwrap();
         unsafe {
-            let inv = Self::from_bytes_unsafe(&bytes);
+            let inv = Self::from_bytes(&bytes);
             Some(inv).filter(|_| !self.is_zero() && self * inv == Fp::one())
-        }
-    }
-
-    fn _sqrt(&self) -> Self {
-        self.pow_vartime(&[
-            0x4f082305b61f3f52,
-            0x65e05aa45a1c72a3,
-            0x6e14116da0605617,
-            0xc19139cb84c680a,
-        ])
-    }
-
-    #[cfg(not(target_os = "zkvm"))]
-    fn sqrt(&self) -> Option<Self> {
-        Some(self._sqrt()).filter(|s| s.square() == *self)
-    }
-
-    #[cfg(target_os = "zkvm")]
-    fn sqrt(&self) -> Option<Self> {
-        use sp1_zkvm::io::FD_HINT;
-
-        // Compute the square root using the zkvm syscall
-        unconstrained! {
-            let mut buf = [0u8; 32];
-            buf.copy_from_slice(&self._sqrt().to_bytes_unsafe());
-            io::write(FD_HINT, &buf);
-        }
-
-        let byte_vec = io::read_vec();
-        let bytes: [u8; 32] = byte_vec.try_into().unwrap();
-        unsafe {
-            let sqrt = Self::from_bytes_unsafe(&bytes);
-            Some(sqrt).filter(|s| s.square() == *self)
         }
     }
 
@@ -1212,22 +1228,9 @@ impl FpElement for Bn254 {
                 .iter()
                 .map(|p| rng.next_u64() % p)
                 .collect::<Vec<u64>>()
-                .as_slice(),
+                .try_into()
+                .unwrap(),
         )
-    }
-
-    fn from_bytes(bytes: &[u8]) -> Self {
-        let bytes: [u8; 32] = bytes.try_into().unwrap();
-        unsafe { transmute::<[u8; 32], Bn254>(bytes) }
-    }
-
-    fn to_bytes(&self) -> Vec<u8> {
-        unsafe { transmute::<Bn254, [u8; 32]>(*self) }.to_vec()
-    }
-
-    fn from_raw_unchecked(v: &[u64]) -> Self {
-        let v: [u64; 4] = v.try_into().unwrap();
-        Bn254(v)
     }
 
     fn pow_vartime(&self, by: &[u64]) -> Self {
@@ -1242,6 +1245,20 @@ impl FpElement for Bn254 {
             }
         }
         res
+    }
+
+    fn is_lexicographically_largest(&self) -> bool {
+        let lhs = self.to_bytes();
+        let rhs = (-*self).to_bytes();
+
+        for (l, r) in lhs.iter().zip(rhs.iter()).rev() {
+            if l > r {
+                return true;
+            } else if l < r {
+                return false;
+            }
+        }
+        false
     }
 }
 
@@ -1262,7 +1279,7 @@ impl<'a> Add<&'a Bn254> for Bn254 {
 
             let mut sum_slice = sum.to_u32_digits();
             sum_slice.resize(2 * LIMBS, 0);
-            Self::from_raw_unchecked(&transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(
                 sum_slice.try_into().unwrap(),
             ))
         }
@@ -1341,7 +1358,7 @@ impl Mul for Bn254 {
 
             let mut prod_slice = prod.to_u32_digits();
             prod_slice.resize(2 * LIMBS, 0);
-            Self::from_raw_unchecked(&transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(
                 prod_slice.try_into().unwrap(),
             ))
         }
@@ -1400,7 +1417,7 @@ impl Neg for Bn254 {
         // the result of the subtraction is p.
         let mask = (((self.0[0] | self.0[1] | self.0[2] | self.0[3]) == 0) as u64).wrapping_sub(1);
 
-        Self::from_raw_unchecked(&[d0 & mask, d1 & mask, d2 & mask, d3 & mask])
+        Self::from_raw_unchecked([d0 & mask, d1 & mask, d2 & mask, d3 & mask])
     }
 
     #[cfg(target_os = "zkvm")]
@@ -1448,6 +1465,18 @@ impl DivAssign for Bn254 {
     }
 }
 
+impl From<u64> for Bls12381 {
+    fn from(n: u64) -> Self {
+        Bls12381([n, 0, 0, 0, 0, 0])
+    }
+}
+
+impl From<u64> for Bn254 {
+    fn from(n: u64) -> Self {
+        Bn254([n, 0, 0, 0])
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1468,8 +1497,8 @@ mod tests {
         let rng = &mut rand::thread_rng();
         for _ in 0..10 {
             let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-            let a = Bls12381::from_raw_unchecked(x.as_slice());
-            let b = Bls12381::from_raw_unchecked(x.as_slice());
+            let a = Bls12381::from_raw_unchecked(x.clone().try_into().unwrap());
+            let b = Bls12381::from_raw_unchecked(x.try_into().unwrap());
             assert_eq!(a, b);
         }
     }
@@ -1480,8 +1509,8 @@ mod tests {
         for _ in 0..10 {
             let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
             let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-            let a = Bls12381::from_raw_unchecked(x.as_slice());
-            let b = Bls12381::from_raw_unchecked(y.as_slice());
+            let a = Bls12381::from_raw_unchecked(x.try_into().unwrap());
+            let b = Bls12381::from_raw_unchecked(y.try_into().unwrap());
             assert_ne!(a, b);
         }
     }
@@ -1491,8 +1520,8 @@ mod tests {
         let rng = &mut rand::thread_rng();
         for _ in 0..10 {
             let x = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-            let a = Bn254::from_raw_unchecked(x.clone().as_slice());
-            let b = Bn254::from_raw_unchecked(x.as_slice());
+            let a = Bn254::from_raw_unchecked(x.clone().try_into().unwrap());
+            let b = Bn254::from_raw_unchecked(x.try_into().unwrap());
             assert_eq!(a, b);
         }
     }
@@ -1503,8 +1532,8 @@ mod tests {
         for _ in 0..10 {
             let x = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
             let y = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-            let a = Bn254::from_raw_unchecked(x.as_slice());
-            let b = Bn254::from_raw_unchecked(y.as_slice());
+            let a = Bn254::from_raw_unchecked(x.try_into().unwrap());
+            let b = Bn254::from_raw_unchecked(y.try_into().unwrap());
             assert_ne!(a, b);
         }
     }

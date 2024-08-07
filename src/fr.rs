@@ -6,6 +6,7 @@ use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use rand_core::RngCore;
 use std::marker::PhantomData;
 use std::mem::transmute;
+use std::ops::Div;
 
 use ff::{Field, PrimeField};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
@@ -13,7 +14,7 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 use crate::fp::{Bls12381, Bn254, FpElement};
 use crate::utils::{adc, sbb};
 
-trait FrElement: FpElement {
+pub(crate) trait FrElement: FpElement {
     const FR_BITS: u32;
     const FR_MODULUS: [u64; 4];
     const FR_R: [u64; 4];
@@ -23,8 +24,7 @@ trait FrElement: FpElement {
     const FR_ROOT_OF_UNITY: [u64; 4];
     const FR_ROOT_OF_UNITY_INV: [u64; 4];
     const FR_DELTA: [u64; 4];
-
-    fn fr_modulus() -> &'static str;
+    const FR_MODULUS_STR: &'static str;
 }
 
 impl FrElement for Bls12381 {
@@ -96,9 +96,8 @@ impl FrElement for Bls12381 {
         0x8634d0aa021aaf8,
     ];
 
-    fn fr_modulus() -> &'static str {
-        "0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001"
-    }
+    const FR_MODULUS_STR: &'static str =
+        "0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
 }
 
 impl FrElement for Bn254 {
@@ -150,9 +149,7 @@ impl FrElement for Bn254 {
         0x09226b6e22c6f0ca,
     ];
 
-    fn fr_modulus() -> &'static str {
-        todo!()
-    }
+    const FR_MODULUS_STR: &'static str = "";
 }
 
 /// Represents an element of the scalar field $\mathbb{F}_q$ of the BLS12-381 elliptic
@@ -160,9 +157,9 @@ impl FrElement for Bn254 {
 // The internal representation of this type is four 64-bit unsigned
 // integers in little-endian order. `Scalar` values are always in
 #[derive(Clone, Copy)]
-pub struct Fr<F: FpElement>(pub [u64; 4], PhantomData<F>);
+pub struct Fr<F: FrElement>(pub [u64; 4], PhantomData<F>);
 
-impl<F: FpElement> fmt::Debug for Fr<F> {
+impl<F: FrElement> fmt::Debug for Fr<F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let tmp = self.to_bytes();
         write!(f, "0x")?;
@@ -173,19 +170,19 @@ impl<F: FpElement> fmt::Debug for Fr<F> {
     }
 }
 
-impl<F: FpElement> fmt::Display for Fr<F> {
+impl<F: FrElement> fmt::Display for Fr<F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl<F: FpElement> From<u64> for Fr<F> {
+impl<F: FrElement> From<u64> for Fr<F> {
     fn from(val: u64) -> Fr<F> {
         Fr::from_raw([val, 0, 0, 0])
     }
 }
 
-impl<F: FpElement> ConstantTimeEq for Fr<F> {
+impl<F: FrElement> ConstantTimeEq for Fr<F> {
     fn ct_eq(&self, other: &Self) -> Choice {
         self.0[0].ct_eq(&other.0[0])
             & self.0[1].ct_eq(&other.0[1])
@@ -194,14 +191,14 @@ impl<F: FpElement> ConstantTimeEq for Fr<F> {
     }
 }
 
-impl<F: FpElement> PartialEq for Fr<F> {
+impl<F: FrElement> PartialEq for Fr<F> {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         bool::from(self.ct_eq(other))
     }
 }
 
-impl<F: FpElement> ConditionallySelectable for Fr<F> {
+impl<F: FrElement> ConditionallySelectable for Fr<F> {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
         Fr::from_raw([
             u64::conditional_select(&a.0[0], &b.0[0], choice),
@@ -212,16 +209,28 @@ impl<F: FpElement> ConditionallySelectable for Fr<F> {
     }
 }
 
-impl<'a, F: FpElement> Neg for &'a Fr<F> {
+impl<'a, F: FrElement> Neg for &'a Fr<F> {
     type Output = Fr<F>;
 
     #[inline]
     fn neg(self) -> Fr<F> {
-        self.neg()
+        // Subtract `self` from `MODULUS` to negate. Ignore the final
+        // borrow because it cannot underflow; self is guaranteed to
+        // be in the field.
+        let (d0, borrow) = sbb(F::FR_MODULUS[0], self.0[0], 0);
+        let (d1, borrow) = sbb(F::FR_MODULUS[1], self.0[1], borrow);
+        let (d2, borrow) = sbb(F::FR_MODULUS[2], self.0[2], borrow);
+        let (d3, _) = sbb(F::FR_MODULUS[3], self.0[3], borrow);
+
+        // `tmp` could be `MODULUS` if `self` was zero. Create a mask that is
+        // zero if `self` was zero, and `u64::max_value()` if self was nonzero.
+        let mask = (((self.0[0] | self.0[1] | self.0[2] | self.0[3]) == 0) as u64).wrapping_sub(1);
+
+        Fr::from_raw([d0 & mask, d1 & mask, d2 & mask, d3 & mask])
     }
 }
 
-impl<F: FpElement> Neg for Fr<F> {
+impl<F: FrElement> Neg for Fr<F> {
     type Output = Fr<F>;
 
     #[inline]
@@ -230,37 +239,135 @@ impl<F: FpElement> Neg for Fr<F> {
     }
 }
 
-impl<'a, 'b, F: FpElement> Sub<&'b Fr<F>> for &'a Fr<F> {
+impl<F: FrElement> Add<Fr<F>> for Fr<F> {
     type Output = Fr<F>;
 
     #[inline]
-    fn sub(self, rhs: &'b Fr<F>) -> Fr<F> {
-        self.sub(rhs)
+    fn add(self, rhs: Fr<F>) -> Fr<F> {
+        let (d0, carry) = adc(self.0[0], rhs.0[0], 0);
+        let (d1, carry) = adc(self.0[1], rhs.0[1], carry);
+        let (d2, carry) = adc(self.0[2], rhs.0[2], carry);
+        let (d3, _) = adc(self.0[3], rhs.0[3], carry);
+
+        // Attempt to subtract the modulus, to ensure the value
+        // is smaller than the modulus.
+        (&Fr::from_raw([d0, d1, d2, d3])).sub(Fr::from_raw(F::FR_MODULUS))
     }
 }
 
-impl<'a, 'b, F: FpElement> Add<&'b Fr<F>> for &'a Fr<F> {
+impl<F: FrElement> Sub<Fr<F>> for Fr<F> {
     type Output = Fr<F>;
 
     #[inline]
-    fn add(self, rhs: &'b Fr<F>) -> Fr<F> {
-        self.add(rhs)
+    fn sub(self, rhs: Fr<F>) -> Fr<F> {
+        let (d0, borrow) = sbb(self.0[0], rhs.0[0], 0);
+        let (d1, borrow) = sbb(self.0[1], rhs.0[1], borrow);
+        let (d2, borrow) = sbb(self.0[2], rhs.0[2], borrow);
+        let (d3, borrow) = sbb(self.0[3], rhs.0[3], borrow);
+
+        // If underflow occurred on the final limb, borrow = 0xfff...fff, otherwise
+        // borrow = 0x000...000. Thus, we use it as a mask to conditionally add the modulus.
+        let (d0, carry) = adc(d0, F::FR_MODULUS[0] & borrow, 0);
+        let (d1, carry) = adc(d1, F::FR_MODULUS[1] & borrow, carry);
+        let (d2, carry) = adc(d2, F::FR_MODULUS[2] & borrow, carry);
+        let (d3, _) = adc(d3, F::FR_MODULUS[3] & borrow, carry);
+
+        Fr::from_raw([d0, d1, d2, d3])
     }
 }
 
-impl<'a, 'b, F: FpElement> Mul<&'b Fr<F>> for &'a Fr<F> {
+impl<F: FrElement> Mul<Fr<F>> for Fr<F> {
     type Output = Fr<F>;
 
+    /// Multiplies `rhs` by `self`, returning the result.
     #[inline]
-    fn mul(self, rhs: &'b Fr<F>) -> Fr<F> {
-        self.mul(rhs)
+    fn mul(self, rhs: Self) -> Self {
+        use num_bigint::BigUint;
+
+        unsafe {
+            let modulus = BigUint::from_slice(&transmute::<[u64; 4], [u32; 8]>(F::FR_MODULUS));
+            let slice_lhs = transmute::<&[u64; 4], &[u32; 8]>(&self.0);
+            let lhs = BigUint::from_slice(slice_lhs) % &modulus;
+            let rhs = BigUint::from_bytes_le(&rhs.to_bytes()) % &modulus;
+
+            let prod = (lhs * rhs) % modulus;
+
+            let mut prod_slice = prod.to_bytes_le();
+            prod_slice.resize(32, 0);
+            Fr::from_bytes(&prod_slice.try_into().unwrap()).unwrap()
+        }
     }
 }
 
-impl_binops_additive!(Fr<F>, Fr<F>);
-impl_binops_multiplicative!(Fr<F>, Fr<F>);
+impl<F: FrElement> Div<Fr<F>> for Fr<F> {
+    type Output = Fr<F>;
 
-impl<F: FpElement> Default for Fr<F> {
+    fn div(self, rhs: Self) -> Self {
+        self * rhs.invert().unwrap()
+    }
+}
+
+impl<F: FrElement> AddAssign for Fr<F> {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = self.add(&rhs);
+    }
+}
+
+impl<F: FrElement> AddAssign<&Fr<F>> for Fr<F> {
+    fn add_assign(&mut self, rhs: &Self) {
+        *self = self.add(rhs);
+    }
+}
+
+impl<F: FrElement> SubAssign for Fr<F> {
+    fn sub_assign(&mut self, rhs: Self) {
+        *self = self.sub(rhs);
+    }
+}
+
+impl<F: FrElement> SubAssign<&Fr<F>> for Fr<F> {
+    fn sub_assign(&mut self, rhs: &Self) {
+        *self = self.sub(*rhs);
+    }
+}
+
+impl<F: FrElement> MulAssign for Fr<F> {
+    fn mul_assign(&mut self, rhs: Self) {
+        *self = *self * rhs;
+    }
+}
+
+impl<F: FrElement> MulAssign<&Fr<F>> for Fr<F> {
+    fn mul_assign(&mut self, rhs: &Self) {
+        *self = *self * *rhs;
+    }
+}
+
+impl<'a, F: FrElement> Add<&'a Fr<F>> for Fr<F> {
+    type Output = Fr<F>;
+
+    fn add(self, rhs: &'a Fr<F>) -> Fr<F> {
+        self.add(*rhs)
+    }
+}
+
+impl<'a, F: FrElement> Sub<&'a Fr<F>> for Fr<F> {
+    type Output = Fr<F>;
+
+    fn sub(self, rhs: &'a Fr<F>) -> Fr<F> {
+        self.sub(*rhs)
+    }
+}
+
+impl<'a, F: FrElement> Mul<&'a Fr<F>> for Fr<F> {
+    type Output = Fr<F>;
+
+    fn mul(self, rhs: &'a Fr<F>) -> Fr<F> {
+        self * *rhs
+    }
+}
+
+impl<F: FrElement> Default for Fr<F> {
     #[inline]
     fn default() -> Self {
         Self::zero()
@@ -268,9 +375,9 @@ impl<F: FpElement> Default for Fr<F> {
 }
 
 #[cfg(feature = "zeroize")]
-impl<F: FpElement> zeroize::DefaultIsZeroes for Fr<F> {}
+impl<F: FrElement> zeroize::DefaultIsZeroes for Fr<F> {}
 
-impl<F: FpElement> Fr<F> {
+impl<F: FrElement> Fr<F> {
     /// Returns zero, the additive identity.
     #[inline]
     pub const fn zero() -> Fr<F> {
@@ -285,9 +392,9 @@ impl<F: FpElement> Fr<F> {
 
     /// Doubles this field element.
     #[inline]
-    pub const fn double(&self) -> Fr<F> {
+    pub fn double(&self) -> Fr<F> {
         // TODO: This can be achieved more efficiently with a bitshift.
-        self.add(self)
+        *self + *self
     }
 
     pub fn random(mut rng: impl RngCore) -> Self {
@@ -357,8 +464,8 @@ impl<F: FpElement> Fr<F> {
         // 1. the lower bits are multiplied by R^2, as normal
         // 2. the upper bits are multiplied by R^2 * 2^256 = R^3
 
-        let d0 = Fr::from_raw([limbs[0], limbs[1], limbs[2], limbs[3]]);
-        let d1 = Fr::from_raw([limbs[4], limbs[5], limbs[6], limbs[7]]);
+        let d0 = Fr::<F>::from_raw([limbs[0], limbs[1], limbs[2], limbs[3]]);
+        let d1 = Fr::<F>::from_raw([limbs[4], limbs[5], limbs[6], limbs[7]]);
         d0 + d1 * Fr::from_raw(F::FR_R)
     }
 
@@ -371,22 +478,7 @@ impl<F: FpElement> Fr<F> {
     /// Squares this element.
     #[inline]
     pub fn square(&self) -> Fr<F> {
-        self * self
-    }
-
-    /// Exponentiates `self` by `by`, where `by` is a
-    /// little-endian order integer exponent.
-    pub fn pow(&self, by: &[u64; 4]) -> Self {
-        let mut res = Self::one();
-        for e in by.iter().rev() {
-            for i in (0..64).rev() {
-                res = res.square();
-                let mut tmp = res;
-                tmp *= self;
-                res.conditional_assign(&tmp, (((*e >> i) & 0x1) as u8).into());
-            }
-        }
-        res
+        *self * *self
     }
 
     /// Exponentiates `self` by `by`, where `by` is a
@@ -402,7 +494,7 @@ impl<F: FpElement> Fr<F> {
                 res = res.square();
 
                 if ((*e >> i) & 1) == 1 {
-                    res.mul_assign(self);
+                    res = res * *self;
                 }
             }
         }
@@ -413,14 +505,14 @@ impl<F: FpElement> Fr<F> {
     /// failing if the element is zero.
     pub fn invert(&self) -> CtOption<Self> {
         #[inline(always)]
-        fn square_assign_multi<F: FpElement>(n: &mut Fr<F>, num_times: usize) {
+        fn square_assign_multi<F: FrElement>(n: &mut Fr<F>, num_times: usize) {
             for _ in 0..num_times {
                 *n = n.square();
             }
         }
         // found using https://github.com/kwantam/addchain
         let mut t0 = self.square();
-        let mut t1 = t0 * self;
+        let mut t1 = t0 * *self;
         let mut t16 = t0.square();
         let mut t6 = t16.square();
         let mut t5 = t6 * t0;
@@ -430,7 +522,7 @@ impl<F: FpElement> Fr<F> {
         let mut t7 = t5 * t6;
         let mut t15 = t0 * t5;
         let mut t17 = t12.square();
-        t1 *= t17;
+        t1 = t1 * t17;
         let mut t3 = t7 * t2;
         let t8 = t1 * t17;
         let t4 = t8 * t2;
@@ -441,156 +533,88 @@ impl<F: FpElement> Fr<F> {
         let t14 = t7 * t15;
         let t13 = t11 * t12;
         t12 = t11 * t17;
-        t15 *= &t12;
-        t16 *= &t15;
-        t3 *= &t16;
-        t17 *= &t3;
-        t0 *= &t17;
-        t6 *= &t0;
-        t2 *= &t6;
+        t15 = t15 * t12;
+        t16 = t16 * t15;
+        t3 = t3 * t16;
+        t17 = t17 * t3;
+        t0 = t0 * t17;
+        t6 = t6 * t0;
+        t2 = t2 * t6;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t17;
+        t0 = t0 * t17;
         square_assign_multi(&mut t0, 9);
-        t0 *= &t16;
+        t0 = t0 * t16;
         square_assign_multi(&mut t0, 9);
-        t0 *= &t15;
+        t0 = t0 * t15;
         square_assign_multi(&mut t0, 9);
-        t0 *= &t15;
+        t0 = t0 * t15;
         square_assign_multi(&mut t0, 7);
-        t0 *= &t14;
+        t0 = t0 * t14;
         square_assign_multi(&mut t0, 7);
-        t0 *= &t13;
+        t0 = t0 * t13;
         square_assign_multi(&mut t0, 10);
-        t0 *= &t12;
+        t0 = t0 * t12;
         square_assign_multi(&mut t0, 9);
-        t0 *= &t11;
+        t0 = t0 * t11;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t8;
+        t0 = t0 * t8;
         square_assign_multi(&mut t0, 8);
-        t0 *= self;
+        t0 = t0 * *self;
         square_assign_multi(&mut t0, 14);
-        t0 *= &t9;
+        t0 = t0 * t9;
         square_assign_multi(&mut t0, 10);
-        t0 *= &t8;
+        t0 = t0 * t8;
         square_assign_multi(&mut t0, 15);
-        t0 *= &t7;
+        t0 = t0 * t7;
         square_assign_multi(&mut t0, 10);
-        t0 *= &t6;
+        t0 = t0 * t6;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t5;
+        t0 = t0 * t5;
         square_assign_multi(&mut t0, 16);
-        t0 *= &t3;
+        t0 = t0 * t3;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0 * t2;
         square_assign_multi(&mut t0, 7);
-        t0 *= &t4;
+        t0 = t0 * t4;
         square_assign_multi(&mut t0, 9);
-        t0 *= &t2;
+        t0 = t0 * t2;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t3;
+        t0 = t0 * t3;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0 * t2;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0 * t2;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0 * t2;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t3;
+        t0 = t0 * t3;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0 * t2;
         square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
+        t0 = t0 * t2;
         square_assign_multi(&mut t0, 5);
-        t0 *= &t1;
+        t0 = t0 * t1;
         square_assign_multi(&mut t0, 5);
-        t0 *= &t1;
+        t0 = t0 * t1;
 
         CtOption::new(t0, !self.ct_eq(&Self::zero()))
     }
-
-    /// Multiplies `rhs` by `self`, returning the result.
-    #[inline]
-    pub fn mul(&self, rhs: &Self) -> Self {
-        use num_bigint::BigUint;
-
-        unsafe {
-            let modulus = BigUint::from_slice(&transmute::<[u64; 4], [u32; 8]>(F::FR_MODULUS));
-            let slice_lhs = transmute::<&[u64; 4], &[u32; 8]>(&self.0);
-            let lhs = BigUint::from_slice(slice_lhs) % &modulus;
-            let rhs = BigUint::from_bytes_le(&rhs.to_bytes()) % &modulus;
-
-            let prod = (lhs * rhs) % modulus;
-
-            let mut prod_slice = prod.to_bytes_le();
-            prod_slice.resize(32, 0);
-            Fr::from_bytes(&prod_slice.try_into().unwrap()).unwrap()
-        }
-    }
-
-    /// Subtracts `rhs` from `self`, returning the result.
-    #[inline]
-    pub const fn sub(&self, rhs: &Self) -> Self {
-        let (d0, borrow) = sbb(self.0[0], rhs.0[0], 0);
-        let (d1, borrow) = sbb(self.0[1], rhs.0[1], borrow);
-        let (d2, borrow) = sbb(self.0[2], rhs.0[2], borrow);
-        let (d3, borrow) = sbb(self.0[3], rhs.0[3], borrow);
-
-        // If underflow occurred on the final limb, borrow = 0xfff...fff, otherwise
-        // borrow = 0x000...000. Thus, we use it as a mask to conditionally add the modulus.
-        let (d0, carry) = adc(d0, F::FR_MODULUS[0] & borrow, 0);
-        let (d1, carry) = adc(d1, F::FR_MODULUS[1] & borrow, carry);
-        let (d2, carry) = adc(d2, F::FR_MODULUS[2] & borrow, carry);
-        let (d3, _) = adc(d3, F::FR_MODULUS[3] & borrow, carry);
-
-        Fr::from_raw([d0, d1, d2, d3])
-    }
-
-    /// Adds `rhs` to `self`, returning the result.
-    #[inline]
-    pub const fn add(&self, rhs: &Self) -> Self {
-        let (d0, carry) = adc(self.0[0], rhs.0[0], 0);
-        let (d1, carry) = adc(self.0[1], rhs.0[1], carry);
-        let (d2, carry) = adc(self.0[2], rhs.0[2], carry);
-        let (d3, _) = adc(self.0[3], rhs.0[3], carry);
-
-        // Attempt to subtract the modulus, to ensure the value
-        // is smaller than the modulus.
-        (&Fr::from_raw([d0, d1, d2, d3])).sub(&Fr::from_raw(F::FR_MODULUS))
-    }
-
-    /// Negates `self`.
-    #[inline]
-    pub const fn neg(&self) -> Self {
-        // Subtract `self` from `MODULUS` to negate. Ignore the final
-        // borrow because it cannot underflow; self is guaranteed to
-        // be in the field.
-        let (d0, borrow) = sbb(F::FR_MODULUS[0], self.0[0], 0);
-        let (d1, borrow) = sbb(F::FR_MODULUS[1], self.0[1], borrow);
-        let (d2, borrow) = sbb(F::FR_MODULUS[2], self.0[2], borrow);
-        let (d3, _) = sbb(F::FR_MODULUS[3], self.0[3], borrow);
-
-        // `tmp` could be `MODULUS` if `self` was zero. Create a mask that is
-        // zero if `self` was zero, and `u64::max_value()` if self was nonzero.
-        let mask = (((self.0[0] | self.0[1] | self.0[2] | self.0[3]) == 0) as u64).wrapping_sub(1);
-
-        Fr::from_raw([d0 & mask, d1 & mask, d2 & mask, d3 & mask])
-    }
 }
 
-impl<F: FpElement> From<Fr<F>> for [u8; 32] {
+impl<F: FrElement> From<Fr<F>> for [u8; 32] {
     fn from(value: Fr<F>) -> [u8; 32] {
         value.to_bytes()
     }
 }
 
-impl<'a, F: FpElement> From<&'a Fr<F>> for [u8; 32] {
+impl<'a, F: FrElement> From<&'a Fr<F>> for [u8; 32] {
     fn from(value: &'a Fr<F>) -> [u8; 32] {
         value.to_bytes()
     }
 }
 
-impl<F: FpElement> Eq for Fr<F> {}
-impl<F: FpElement + 'static> Field for Fr<F> {
+impl<F: FrElement> Eq for Fr<F> {}
+impl<F: FrElement + 'static> Field for Fr<F> {
     const ZERO: Self = Self::zero();
     const ONE: Self = Self::one();
 
@@ -636,7 +660,7 @@ impl<F: FpElement + 'static> Field for Fr<F> {
     }
 }
 
-impl<F: FpElement + 'static> PrimeField for Fr<F> {
+impl<F: FrElement + 'static> PrimeField for Fr<F> {
     type Repr = [u8; 32];
 
     fn from_repr(r: Self::Repr) -> CtOption<Self> {
@@ -651,7 +675,7 @@ impl<F: FpElement + 'static> PrimeField for Fr<F> {
         Choice::from(self.to_bytes()[0] & 1)
     }
 
-    const MODULUS: &'static str = F::fr_modulus();
+    const MODULUS: &'static str = F::FR_MODULUS_STR;
     const NUM_BITS: u32 = F::FR_BITS as u32;
     const CAPACITY: u32 = Self::NUM_BITS - 1;
     const TWO_INV: Self = Fr::from_raw(F::FR_TWO_INV);
@@ -662,7 +686,7 @@ impl<F: FpElement + 'static> PrimeField for Fr<F> {
     const DELTA: Self = Fr::from_raw(F::FR_DELTA);
 }
 
-impl<T, F: FpElement> core::iter::Sum<T> for Fr<F>
+impl<T, F: FrElement> core::iter::Sum<T> for Fr<F>
 where
     T: core::borrow::Borrow<Fr<F>>,
 {
@@ -674,7 +698,7 @@ where
     }
 }
 
-impl<T, F: FpElement> core::iter::Product<T> for Fr<F>
+impl<T, F: FrElement> core::iter::Product<T> for Fr<F>
 where
     T: core::borrow::Borrow<Fr<F>>,
 {
@@ -797,7 +821,7 @@ mod tests {
                         assert_eq!((a + b) / c, a / c + b / c);
 
                         // division and multiplication equality
-                        if !b.is_zero() {
+                        if b.is_zero().unwrap_u8() == 0 {
                             assert_eq!(a / b, a * b.invert().unwrap());
                         }
                     }
@@ -807,7 +831,7 @@ mod tests {
                 fn test_inversion() {
                     for _ in 0..10 {
                         let a = $rand_fn();
-                        if !a.is_zero() {
+                        if !a.is_zero().unwrap_u8() == 0 {
                             assert_eq!(a * a.invert().unwrap(), Fr::<$curve>::one());
                             assert_eq!(a.invert().unwrap().invert().unwrap(), a);
                         }

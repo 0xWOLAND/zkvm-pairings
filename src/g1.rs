@@ -2,29 +2,29 @@ use std::ops::{Add, Mul, Neg, Sub};
 
 use crate::common::AffinePoint;
 use crate::fp::{Bls12381, Bn254, FpElement};
-use crate::fr::Fr;
+use crate::fr::{Fr, FrElement};
 
-pub(crate) trait G1Element: FpElement {
-    type G1AffineType;
+pub trait G1Element: FpElement + AffinePoint {
+    const B: u64;
     fn is_on_curve(x: &Self, y: &Self) -> bool {
-        y.square() == x.square() * x + Self::from_raw_unchecked(Self::B)
+        y.square() == x.square() * x + Self::from(Self::B)
     }
-    fn is_valid(p: &Self::G1AffineType) -> Result<(), String>;
+    fn is_valid(p: &G1Affine<Self>) -> Result<(), String>;
+    fn from_compressed_unchecked(bytes: &[u8]) -> Option<G1Affine<Self>>;
+    fn generator() -> G1Affine<Self>;
 }
 
 impl G1Element for Bls12381 {
-    type G1AffineType = G1Affine<Bls12381>;
+    const B: u64 = 4; // BLS12-381 Equation: y^2 = x^3 + 4
     fn is_valid(p: &G1Affine<Bls12381>) -> Result<(), String> {
         let x = p.x;
         let y = p.y;
-
         // Check if the point is on the curve
         if !Self::is_on_curve(&x, &y) {
             return Err("Point is not on curve".to_string());
         }
 
         // Check if the point is torsion free
-        let generator = Self::from_raw_unchecked(Self::X);
         let beta = Self::from_raw_unchecked([
             0x2e01fffffffefffe,
             0xde17d813620a0002,
@@ -33,6 +33,8 @@ impl G1Element for Bls12381 {
             0x5f19672fdf76ce51,
             0x0,
         ]);
+
+        let p = G1Affine::new(x, y, false);
         let rhs = p.mul_by_x().mul_by_x().neg();
         let lhs = G1Affine::new(p.x * beta, p.y, false);
 
@@ -40,20 +42,128 @@ impl G1Element for Bls12381 {
             .then(|| ())
             .ok_or("Point is not torsion free".to_string())
     }
+
+    fn from_compressed_unchecked(bytes: &[u8]) -> Option<G1Affine<Bls12381>> {
+        // Obtain the three flags from the start of the byte sequence
+        let compression_flag_set = (bytes[0] >> 7) & 1 == 1;
+        let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
+        let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
+
+        // Attempt to obtain the x-coordinate
+        let x = {
+            let mut tmp = [0; 48];
+            tmp.copy_from_slice(&bytes[0..48]);
+
+            // Mask away the flag bits
+            tmp[0] &= 0b0001_1111;
+
+            Bls12381::from_bytes(&tmp)
+        };
+
+        if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
+            // Infinity flag is set and x-coordinate is zero
+            Some(G1Affine::identity())
+        } else if !infinity_flag_set && compression_flag_set {
+            // Recover a y-coordinate given x by y = sqrt(x^3 + B)
+            let y_result = ((x.square() * x) + Bls12381::from(Bls12381::B)).sqrt();
+
+            y_result.map(|y| {
+                let y = match !(y.is_lexicographically_largest() ^ sort_flag_set) {
+                    true => y,
+                    false => -y,
+                };
+
+                G1Affine {
+                    x,
+                    y,
+                    is_infinity: infinity_flag_set,
+                }
+            })
+        } else {
+            None
+        }
+    }
+
+    fn generator() -> G1Affine<Self> {
+        const G1_X: Bls12381 = Bls12381::from_raw_unchecked([
+            0xfb3af00adb22c6bb,
+            0x6c55e83ff97a1aef,
+            0xa14e3a3f171bac58,
+            0xc3688c4f9774b905,
+            0x2695638c4fa9ac0f,
+            0x17f1d3a73197d794,
+        ]);
+        const G1_Y: Bls12381 = Bls12381::from_raw_unchecked([
+            0x0caa232946c5e7e1,
+            0xd03cc744a2888ae4,
+            0x00db18cb2c04b3ed,
+            0xfcf5e095d5d00af6,
+            0xa09e30ed741d8ae4,
+            0x08b3f481e3aaa0f1,
+        ]);
+
+        G1Affine::new(G1_X, G1_Y, false)
+    }
 }
 
 impl G1Element for Bn254 {
-    type G1AffineType = G1Affine<Bn254>;
-
-    // G1Affine Bn254 elements are always torsion free
-    fn is_valid(p: &Self::G1AffineType) -> Result<(), String> {
-        // Check if the point is on the curve
+    const B: u64 = 3; // BN254 Equation: y^2 = x^3 + 3
+                      // G1Affine Bn254 elements are always torsion free
+    fn is_valid(p: &G1Affine<Bn254>) -> Result<(), String> {
         let x = p.x;
         let y = p.y;
 
         Self::is_on_curve(&x, &y)
             .then(|| ())
             .ok_or("Point is not on curve".to_string())
+    }
+
+    fn from_compressed_unchecked(bytes: &[u8]) -> Option<G1Affine<Bn254>> {
+        // Obtain the three flags from the start of the byte sequence
+        let compression_flag_set = (bytes[0] >> 7) & 1 == 1;
+        let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
+        let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
+
+        // Attempt to obtain the x-coordinate
+        let x = {
+            let mut tmp = [0; 32];
+            tmp.copy_from_slice(&bytes[0..32]);
+
+            // Mask away the flag bits
+            tmp[0] &= 0b0001_1111;
+
+            Bn254::from_bytes(&tmp)
+        };
+
+        if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
+            // Infinity flag is set and x-coordinate is zero
+            Some(G1Affine::identity())
+        } else if !infinity_flag_set && compression_flag_set {
+            // Recover a y-coordinate given x by y = sqrt(x^3 + B)
+            let y_result = ((x.square() * x) + Bn254::from(Bn254::B)).sqrt();
+
+            y_result.map(|y| {
+                let y = match !(y.is_lexicographically_largest() ^ sort_flag_set) {
+                    true => y,
+                    false => -y,
+                };
+
+                G1Affine {
+                    x,
+                    y,
+                    is_infinity: infinity_flag_set,
+                }
+            })
+        } else {
+            None
+        }
+    }
+
+    fn generator() -> G1Affine<Self> {
+        const G1_X: Bn254 = Bn254::from_raw_unchecked([0x1, 0x0, 0x0, 0x0]);
+        const G1_Y: Bn254 = Bn254::from_raw_unchecked([0x2, 0x0, 0x0, 0x0]);
+
+        G1Affine::new(G1_X, G1_Y, false)
     }
 }
 
@@ -72,6 +182,9 @@ impl<F: G1Element> PartialEq for G1Affine<F> {
 
 impl<F: G1Element> Eq for G1Affine<F> {}
 
+// impl<F: G1Element<G1AffineType = G1Affine<F>>> G1Affine<F> {
+// }
+
 impl<F: G1Element> G1Affine<F> {
     fn new(x: F, y: F, is_infinity: bool) -> Self {
         G1Affine { x, y, is_infinity }
@@ -85,7 +198,7 @@ impl<F: G1Element> G1Affine<F> {
         }
     }
 
-    fn is_identity(&self) -> bool {
+    pub(crate) fn is_identity(&self) -> bool {
         self.is_infinity
     }
 
@@ -93,22 +206,12 @@ impl<F: G1Element> G1Affine<F> {
         self.x.is_zero() && self.y.is_zero()
     }
 
-    fn generator() -> Self {
-        G1Affine {
-            x: F::from_raw_unchecked(F::G1_X),
-            y: F::from_raw_unchecked(F::G1_Y),
-            is_infinity: false,
-        }
-    }
-
-    fn is_valid(&self) -> Result<(), String> {
-        self.is_identity()
-            .then(|| ())
-            .ok_or_else(|| F::is_valid(&self).unwrap_err())
+    pub fn generator() -> Self {
+        F::generator()
     }
 
     fn random(mut rng: impl rand::Rng) -> Self {
-        let b = F::from_raw_unchecked(F::B);
+        let b = F::from(F::B);
         loop {
             let x = F::random(&mut rng);
             let flip_sign = rng.next_u32() % 2 != 0;
@@ -131,7 +234,7 @@ impl<F: G1Element> G1Affine<F> {
         }
     }
 
-    fn double(&self) -> Self {
+    pub fn double(&self) -> Self {
         let x = self.x;
         let y = self.y;
 
@@ -149,9 +252,13 @@ impl<F: G1Element> G1Affine<F> {
             is_infinity: false,
         }
     }
-}
 
-impl<F: G1Element> G1Affine<F> {
+    fn is_valid(&self) -> Result<(), String> {
+        self.is_identity()
+            .then(|| ())
+            .ok_or_else(|| F::is_valid(&self).unwrap_err())
+    }
+
     fn mul_by_x(&self) -> Self {
         let mut xself = G1Affine::identity();
         let mut x = F::X >> 1;
@@ -160,52 +267,11 @@ impl<F: G1Element> G1Affine<F> {
             tmp = tmp.double();
 
             if x % 2 == 1 {
-                xself += tmp;
+                xself = xself + tmp;
             }
             x >>= 1;
         }
         xself
-    }
-
-    pub fn from_compressed_unchecked(bytes: &[u8; 48]) -> Option<Self> {
-        // Obtain the three flags from the start of the byte sequence
-        let compression_flag_set = (bytes[0] >> 7) & 1 == 1;
-        let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
-        let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
-
-        // Attempt to obtain the x-coordinate
-        let x = {
-            let mut tmp = [0; 48];
-            tmp.copy_from_slice(&bytes[0..48]);
-
-            // Mask away the flag bits
-            tmp[0] &= 0b0001_1111;
-
-            F::from_bytes(&tmp)
-        };
-
-        if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
-            // Infinity flag is set and x-coordinate is zero
-            Some(G1Affine::identity())
-        } else if !infinity_flag_set && compression_flag_set {
-            // Recover a y-coordinate given x by y = sqrt(x^3 + B)
-            let y_result = ((x.square() * x) + F::<F>::from_raw_unchecked(F::B)).sqrt();
-
-            y_result.map(|y| {
-                let y = match !(y.is_lexicographically_largest() ^ sort_flag_set) {
-                    true => y,
-                    false => -y,
-                };
-
-                G1Affine {
-                    x,
-                    y,
-                    is_infinity: infinity_flag_set,
-                }
-            })
-        } else {
-            None
-        }
     }
 }
 
@@ -221,12 +287,12 @@ impl<F: G1Element> Neg for G1Affine<F> {
     }
 }
 
-impl<'a, 'b, F: G1Element> Mul<&'b Fr<F>> for &'a G1Affine<F> {
-    type Output = G1Affine<F>;
+impl<F: FrElement, G: G1Element> Mul<Fr<F>> for G1Affine<G> {
+    type Output = G1Affine<G>;
 
     #[inline]
-    fn mul(self, other: &'b Fr<F>) -> G1Affine<F> {
-        let mut acc = G1Affine::<F>::identity();
+    fn mul(self, other: Fr<F>) -> G1Affine<G> {
+        let mut acc = G1Affine::<G>::identity();
 
         for bit in other
             .0
@@ -238,7 +304,7 @@ impl<'a, 'b, F: G1Element> Mul<&'b Fr<F>> for &'a G1Affine<F> {
             acc = acc.double();
 
             if bit {
-                acc += self;
+                acc = acc + self;
             }
         }
 
@@ -246,17 +312,17 @@ impl<'a, 'b, F: G1Element> Mul<&'b Fr<F>> for &'a G1Affine<F> {
     }
 }
 
-impl<'a, 'b, F: G1Element> Add<&'b G1Affine<F>> for &'a G1Affine<F> {
+impl<F: G1Element> Add<G1Affine<F>> for G1Affine<F> {
     type Output = G1Affine<F>;
 
     #[inline]
-    fn add(self, other: &'b G1Affine<F>) -> G1Affine<F> {
+    fn add(self, other: G1Affine<F>) -> G1Affine<F> {
         if self.is_infinity {
-            return *other;
+            return other;
         }
 
         if other.is_infinity {
-            return *self;
+            return self;
         }
 
         let x1 = self.x;
@@ -280,11 +346,11 @@ impl<'a, 'b, F: G1Element> Add<&'b G1Affine<F>> for &'a G1Affine<F> {
     }
 }
 
-impl<'a, 'b, F: G1Element> Sub<&'b G1Affine<F>> for &'a G1Affine<F> {
+impl<F: G1Element> Sub<G1Affine<F>> for G1Affine<F> {
     type Output = G1Affine<F>;
 
     #[inline]
-    fn sub(self, other: &'b G1Affine<F>) -> G1Affine<F> {
+    fn sub(self, other: G1Affine<F>) -> G1Affine<F> {
         if self == other {
             return G1Affine::<F>::identity();
         }
@@ -437,7 +503,7 @@ mod bls12381_g1_affine_test {
             let b = G1Affine::<Bls12381>::random(&mut rand::thread_rng());
             let b1 = b.double() + b;
             let b2 = b1 + b;
-            let b3 = b * Fr::from(4);
+            let b3 = b * Fr::<Bls12381>::from(4);
             assert!(b2 == b.double().double());
             assert!(b2 == b3);
         }
@@ -466,8 +532,8 @@ mod bls12381_g1_affine_test {
             let r: u64 = rng.gen::<u64>() % 100;
             let k = Fr::<Bls12381>::from(r);
             let a = G1Affine::<Bls12381>::random(&mut rng);
-            let lhs = &a * &k;
-            let rhs = (0..r).fold(G1Affine::<Bls12381>::identity(), |acc, _| acc + &a);
+            let lhs = a * k;
+            let rhs = (0..r).fold(G1Affine::<Bls12381>::identity(), |acc, _| acc + a);
             assert_eq!(lhs, rhs);
         }
     }
@@ -516,16 +582,12 @@ mod bn254_g1_affine_test {
                 0x6263ee31e953a86d,
                 0x866816fd0826ce7b,
                 0x991224ec2a74beb2,
-                0x041314ca93e1fee0,
-                0x19cdf3807146e68e,
             ]),
             Bn254::from_raw_unchecked([
                 0xe7da608505d48616,
                 0x22c9f5c77db40989,
                 0x35c0752ac9742b45,
                 0x41bfaf99f604d1f8,
-                0xf45c6e4fc2780554,
-                0x7481b1f261aabac,
             ]),
             false,
         );
@@ -540,16 +602,12 @@ mod bn254_g1_affine_test {
                 0x6c55e83ff97a1aef,
                 0xa14e3a3f171bac58,
                 0xc3688c4f9774b905,
-                0x2695638c4fa9ac0f,
-                0x17f1d3a73197d794,
             ]),
             Bn254::from_raw_unchecked([
                 0x0caa232946c5e7e1,
                 0xd03cc744a2888ae4,
                 0x00db18cb2c04b3ed,
                 0xfcf5e095d5d00af6,
-                0xa09e30ed741d8ae4,
-                0x08b3f481e3aaa0f1,
             ]),
             false,
         );
@@ -559,16 +617,12 @@ mod bn254_g1_affine_test {
                 0xe28f75bb8f1c7c42,
                 0x43902d0ac358a62a,
                 0x9721db3091280125,
-                0x8808c8eb50a9450c,
-                0x572cbea904d6746,
             ]),
             Bn254::from_raw_unchecked([
                 0xba86881979749d28,
                 0x4c56d9d4cd16bd1b,
                 0xf73bb9021d5fd76a,
                 0x22ba3ecb8670e461,
-                0x22fda673779d8e38,
-                0x166a9d8cabc673a3,
             ]),
             false,
         );
@@ -580,16 +634,12 @@ mod bn254_g1_affine_test {
                 0x6263ee31e953a86d,
                 0x866816fd0826ce7b,
                 0x991224ec2a74beb2,
-                0x041314ca93e1fee0,
-                0x19cdf3807146e68e,
             ]),
             Bn254::from_raw_unchecked([
                 0xe7da608505d48616,
                 0x22c9f5c77db40989,
                 0x35c0752ac9742b45,
                 0x41bfaf99f604d1f8,
-                0xf45c6e4fc2780554,
-                0x7481b1f261aabac,
             ]),
             false,
         );
@@ -600,16 +650,12 @@ mod bn254_g1_affine_test {
                 0x2c4c7d1e2b03e6b1,
                 0x5df708511d3f6863,
                 0x65f07f9a9b73f98d,
-                0xb6e8189b95a60b88,
-                0x1252a4ac3529f8b2,
             ]),
             Bn254::from_raw_unchecked([
                 0x77dd65f2e90f5358,
                 0x15ac65f21bed27bd,
                 0xa9af032870f7bbc6,
                 0x18ab5c26dffca63c,
-                0x1a49b9965eca3cb8,
-                0x2a1bc189e36902d,
             ]),
             false,
         );
@@ -618,7 +664,7 @@ mod bn254_g1_affine_test {
             let b = G1Affine::<Bn254>::random(&mut rand::thread_rng());
             let b1 = b.double() + b;
             let b2 = b1 + b;
-            let b3 = b * Fr::from(4);
+            let b3 = b * Fr::<Bn254>::from(4);
             assert!(b2 == b.double().double());
             assert!(b2 == b3);
         }
@@ -647,8 +693,8 @@ mod bn254_g1_affine_test {
             let r: u64 = rng.gen::<u64>() % 100;
             let k = Fr::<Bn254>::from(r);
             let a = G1Affine::<Bn254>::random(&mut rng);
-            let lhs = &a * &k;
-            let rhs = (0..r).fold(G1Affine::<Bn254>::identity(), |acc, _| acc + &a);
+            let lhs = a * k;
+            let rhs = (0..r).fold(G1Affine::<Bn254>::identity(), |acc, _| acc + a);
             assert_eq!(lhs, rhs);
         }
     }

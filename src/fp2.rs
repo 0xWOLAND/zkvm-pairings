@@ -1,5 +1,6 @@
+use crate::fp::{Bls12381, Bn254, FpElement};
 use core::fmt;
-use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use core::ops::{Add, Div, Mul, Neg, Sub};
 use rand_core::RngCore;
 
 cfg_if::cfg_if! {
@@ -9,320 +10,83 @@ cfg_if::cfg_if! {
     }
 }
 
-use crate::fp::FpElement;
-
-#[derive(Copy, Clone)]
-/// Represents an element in the field Fp2.
-pub struct Fp2<F: FpElement> {
-    /// The first component of the Fp2 element.
-    pub c0: F,
-    /// The second component of the Fp2 element.
-    pub c1: F,
+pub trait Fp2Element: FpElement {
+    fn from_bytes_slice(bytes: &[u8]) -> Fp2<Self>;
+    fn to_bytes_vec(f: &Fp2<Self>) -> Vec<u8>;
+    fn _invert(f: &Fp2<Self>) -> Option<Fp2<Self>>;
+    fn invert(f: &Fp2<Self>) -> Option<Fp2<Self>>;
+    fn _sqrt(f: &Fp2<Self>) -> Option<Fp2<Self>>;
+    fn sqrt(f: &Fp2<Self>) -> Option<Fp2<Self>>;
 }
 
-impl<F: FpElement> fmt::Debug for Fp2<F> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?} + {:?}*u", self.c0, self.c1)
-    }
-}
+impl Fp2Element for Bls12381 {
+    fn from_bytes_slice(bytes: &[u8]) -> Fp2<Bls12381> {
+        // Split the bytes array into two 48-byte slices
+        let c0_bytes: [u8; 48] = bytes[..48].try_into().expect("slice with incorrect length");
+        let c1_bytes: [u8; 48] = bytes[48..].try_into().expect("slice with incorrect length");
 
-impl<F: FpElement> Default for Fp2<F> {
-    fn default() -> Self {
-        Fp2::zero()
-    }
-}
+        // Call Bls12381::from_bytes directly
+        let c0 = Bls12381::from_bytes(&c0_bytes);
+        let c1 = Bls12381::from_bytes(&c1_bytes);
 
-#[cfg(feature = "zeroize")]
-impl<F: FpElement> zeroize::DefaultIsZeroes for Fp2<F> {}
-
-impl<F: FpElement> From<F> for Fp2<F> {
-    fn from(f: F) -> Fp2<F> {
-        Fp2 { c0: f, c1: f }
-    }
-}
-
-impl<F: FpElement> Eq for Fp2<F> {}
-impl<F: FpElement> PartialEq for Fp2<F> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.c0.eq(&other.c0) & self.c1.eq(&other.c1)
-    }
-
-    fn ne(&self, other: &Self) -> bool {
-        !self.eq(other)
-    }
-}
-
-impl<'a, F: FpElement> Neg for &'a Fp2<F> {
-    type Output = Fp2<F>;
-
-    #[inline]
-    fn neg(self) -> Fp2<F> {
-        self.neg()
-    }
-}
-
-impl<F: FpElement> Neg for Fp2<F> {
-    type Output = Fp2<F>;
-
-    #[inline]
-    fn neg(self) -> Fp2<F> {
-        -&self
-    }
-}
-
-impl<'a, 'b, F: FpElement> Sub<&'b Fp2<F>> for &'a Fp2<F> {
-    type Output = Fp2<F>;
-
-    #[inline]
-    fn sub(self, rhs: &'b Fp2<F>) -> Fp2<F> {
-        self.sub(rhs)
-    }
-}
-
-impl<'a, 'b, F: FpElement> Add<&'b Fp2<F>> for &'a Fp2<F> {
-    type Output = Fp2<F>;
-
-    #[inline]
-    fn add(self, rhs: &'b Fp2<F>) -> Fp2<F> {
-        self.add(rhs)
-    }
-}
-
-impl<'a, 'b, F: FpElement> Mul<&'b Fp2<F>> for &'a Fp2<F> {
-    type Output = Fp2<F>;
-
-    #[inline]
-    fn mul(self, rhs: &'b Fp2<F>) -> Fp2<F> {
-        self.mul(rhs)
-    }
-}
-
-impl<'a, 'b, F: FpElement> Mul<&'b F> for &'a Fp2<F> {
-    type Output = Fp2<F>;
-
-    #[inline]
-    fn mul(self, rhs: &'b F) -> Fp2<F> {
-        Fp2::new(self.c0 * rhs, self.c1 * rhs)
-    }
-}
-
-impl<'a, 'b, F: FpElement> Div<&'b Fp2<F>> for &'a Fp2<F> {
-    type Output = Fp2<F>;
-
-    #[inline]
-    fn div(self, rhs: &'b Fp2<F>) -> Fp2<F> {
-        self.div(rhs)
-    }
-}
-
-impl_binops_additive!(Fp2<F>, Fp2<F>);
-impl_binops_multiplicative!(Fp2<F>, Fp2<F>);
-impl_binops_multiplicative!(Fp2<F>, F);
-impl_binops_divisible!(Fp2<F>, Fp2<F>);
-
-impl<F: FpElement> Fp2<F> {
-    /// Returns the zero element of Fp2.
-    #[inline]
-    pub const fn zero() -> Fp2<F> {
-        Fp2::new(F::zero(), F::zero())
-    }
-
-    /// Returns the one element of Fp2.
-    #[inline]
-    pub const fn one() -> Fp2<F> {
-        Fp2::new(F::one(), F::zero())
-    }
-
-    pub const fn new(c0: F, c1: F) -> Fp2<F> {
-        Fp2 { c0, c1 }
-    }
-
-    pub const fn non_residue() -> Fp2<F> {
-        Fp2::new(F::one(), F::one())
-    }
-
-    pub fn is_one(&self) -> bool {
-        self.c0.is_one() && self.c1.is_zero()
-    }
-
-    /// Checks if this element is zero.
-    pub fn is_zero(&self) -> bool {
-        self.c0.is_zero() && self.c1.is_zero()
-    }
-
-    /// Generates a random element in Fp2.
-    pub fn random(mut rng: impl RngCore) -> Fp2<F> {
-        Fp2::new(F::random(&mut rng), F::random(&mut rng))
-    }
-
-    pub fn from_bytes(bytes: &[u8; 96]) -> Fp2<F> {
-        let c0 = F::from_bytes_unsafe(&bytes[..48].try_into().unwrap());
-        let c1 = F::from_bytes_unsafe(&bytes[48..].try_into().unwrap());
+        // Create the Fp2 element
         Fp2::new(c0, c1)
     }
 
-    pub fn to_bytes(&self) -> [u8; 96] {
-        let mut res = [0u8; 96];
-        res[..48].copy_from_slice(&self.c0.to_bytes_unsafe());
-        res[48..].copy_from_slice(&self.c1.to_bytes_unsafe());
-        res
+    fn to_bytes_vec(f: &Fp2<Bls12381>) -> Vec<u8> {
+        let mut bytes = [0u8; 96];
+        bytes[..48].copy_from_slice(&Self::to_bytes(&f.c0));
+        bytes[48..].copy_from_slice(&Self::to_bytes(&f.c1));
+        bytes.to_vec()
     }
 
-    /// Raises this element to p.
-    #[inline(always)]
-    pub fn frobenius_map(&self) -> Self {
-        // This is always just a conjugation. If you're curious why, here's
-        // an article about it: https://alicebob.cryptoland.net/the-frobenius-endomorphism-with-finite-fields/
-        self.conjugate()
-    }
-
-    /// Computes the conjugate of this element.
-    #[inline(always)]
-    pub fn conjugate(&self) -> Self {
-        Fp2::new(self.c0, -self.c1)
-    }
-
-    /// Multiplies this element by the non-residue.
-    #[inline(always)]
-    pub fn mul_by_nonresidue(&self) -> Fp2<F> {
-        // Multiply a + bu by u + 1, getting
-        // au + a + bu^2 + bu
-        // and because u^2 = -1, we get
-        // (a - b) + (a + b)u
-
-        // Fp2::new(self.c0 - self.c1, self.c0 + self.c1)
-        self * &Fp2::non_residue()
-    }
-
-    /// Computes the square of this element.
-    pub fn square(&self) -> Fp2<F> {
-        // Complex squaring:
-        //
-        // v0  = c0 * c1
-        // c0' = (c0 + c1) * (c0 + \beta*c1) - v0 - \beta * v0
-        // c1' = 2 * v0
-        //
-        // In BLS12-381's F_{p^2}, our \beta is -1 so we
-        // can modify this formula:
-        //
-        // c0' = (c0 + c1) * (c0 - c1)
-        // c1' = 2 * c0 * c1
-
-        // let a = (&self.c0).add(&self.c1);
-        // let b = (&self.c0).sub(&self.c1);
-        // let c = (&self.c0).add(&self.c0);
-
-        // Fp2::new((&a).mul(&b), (&c).mul(&self.c1))
-        self * self
-    }
-
-    /// Multiplies this element by another element.
     #[cfg(not(target_os = "zkvm"))]
-    pub fn mul(&self, rhs: &Fp2<F>) -> Fp2<F> {
-        // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
-        // computes the result as:
-        //
-        //   a·b = (a_0 b_0 + a_1 b_1 β) + (a_0 b_1 + a_1 b_0)i
-        //
-        // In BLS12-381's F_{p^2}, our β is -1, so the resulting F_{p^2} element is:
-        //
-        //   c_0 = a_0 b_0 - a_1 b_1
-        //   c_1 = a_0 b_1 + a_1 b_0
-        //
-        // Each of these is a "sum of products", which we can compute efficiently.
-
-        Fp2::new(
-            self.c0 * rhs.c0 - self.c1 * rhs.c1,
-            self.c0 * rhs.c1 + self.c1 * rhs.c0,
-        )
+    fn invert(f: &Fp2<Self>) -> Option<Fp2<Self>> {
+        f._invert()
     }
 
-    /// Multiplies this element by another element.
     #[cfg(target_os = "zkvm")]
-    pub fn mul(&self, rhs: &Fp2<F>) -> Fp2<F> {
-        unsafe {
-            let mut lhs = transmute::<Fp2<F>, [u32; 24]>(*self);
-            let rhs = transmute::<Fp2<F>, [u32; 24]>(*rhs);
-            // bls12381_sys_bigint(&mut result, 0, lhs, rhs);
-            syscall_bls12381_fp2_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            *transmute::<&mut [u32; 24], &Fp2<F>>(&mut lhs)
+    fn invert(f: &Fp2<Bls12381>) -> Option<Fp2<Bls12381>> {
+        use sp1_zkvm::{
+            io::FD_HINT,
+            lib::{io, unconstrained},
+        };
+
+        fn _invert(x: &Fp2<Bls12381>) -> Option<Fp2<Bls12381>> {
+            let t = x.c0.square() + x.c1.square()._invert();
+            Some(Fp2::new(x.c0 * t, x.c1 * -t)).filter(|&y| *x * y == Fp2::one())
         }
-    }
 
-    pub fn div(&self, rhs: &Fp2<F>) -> Fp2<F> {
-        self * rhs.invert().unwrap()
-    }
+        unconstrained! {
+            let mut buf = [0u8; 97];
+            match _invert(&f) {
+                Some(x) => {
+                    buf[96] = 1;
+                    buf[0..96].copy_from_slice(&Fp2Element::to_bytes_vec(&x));
+                }
+                None => {}
+            }
 
-    /// Adds another element to this element.
-    #[cfg(not(target_os = "zkvm"))]
-    pub fn add(&self, rhs: &Fp2<F>) -> Fp2<F> {
-        Fp2::new((&self.c0).add(&rhs.c0), (&self.c1).add(&rhs.c1))
-    }
-
-    /// Adds another element to this element.
-    #[cfg(target_os = "zkvm")]
-    pub fn add(&self, rhs: &Fp2<F>) -> Fp2<F> {
-        unsafe {
-            let mut lhs = transmute::<Fp2<F>, [u32; 24]>(*self);
-            let rhs = transmute::<Fp2<F>, [u32; 24]>(*rhs);
-            syscall_bls12381_fp2_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            *transmute::<&mut [u32; 24], &Fp2<F>>(&mut lhs)
+            io::write(FD_HINT, &buf);
         }
+
+        let bytes: [u8; 97] = io::read_vec().try_into().unwrap();
+        let is_some = bytes[96] == 1;
+        let bytes = bytes[..96].try_into().unwrap();
+        let out = Bls12381::from_bytes_slice(bytes);
+
+        Some(out).filter(|_| is_some)
     }
 
-    /// Subtracts another element from this element.
+    // Computes the square root of this element.
     #[cfg(not(target_os = "zkvm"))]
-    pub fn sub(&self, rhs: &Fp2<F>) -> Fp2<F> {
-        Fp2::new((&self.c0).sub(&rhs.c0), (&self.c1).sub(&rhs.c1))
-    }
-
-    /// Subtracts another element from this element.
-    #[cfg(target_os = "zkvm")]
-    pub fn sub(&self, rhs: &Fp2<F>) -> Fp2<F> {
-        unsafe {
-            let mut lhs = transmute::<Fp2<F>, [u32; 24]>(*self);
-            let rhs = transmute::<Fp2<F>, [u32; 24]>(*rhs);
-            syscall_bls12381_fp2_submod(lhs.as_mut_ptr(), rhs.as_ptr());
-            *transmute::<&mut [u32; 24], &Fp2<F>>(&mut lhs)
-        }
-    }
-
-    /// Negates this element.
-    #[cfg(not(target_os = "zkvm"))]
-    pub fn neg(&self) -> Fp2<F> {
-        Fp2::new((&self.c0).neg(), (&self.c1).neg())
-    }
-
-    /// Negates this element.
-    #[cfg(target_os = "zkvm")]
-    pub fn neg(&self) -> Fp2<F> {
-        unsafe {
-            let rhs = transmute::<[u64; 6], [u32; 12]>(C::MODULUS);
-            let rhs_ptr = rhs.as_ptr();
-
-            let mut lhs_c0 = transmute::<F<F>, [u32; 12]>(self.c0);
-            syscall_bls12381_fp2_submod(lhs_c0.as_mut_ptr(), rhs_ptr);
-
-            let mut lhs_c1 = transmute::<F<F>, [u32; 12]>(self.c1);
-            syscall_bls12381_fp2_submod(lhs_c1.as_mut_ptr(), rhs_ptr);
-
-            Fp2::new(
-                F::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs_c0)),
-                F::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs_c1)),
-            )
-        }
-    }
-
-    /// Computes the square root of this element.
-    #[cfg(not(target_os = "zkvm"))]
-    pub fn sqrt(&self) -> Option<Self> {
-        if self.is_zero() {
-            return Some(Fp2::<F>::zero());
+    fn sqrt(f: &Fp2<Self>) -> Option<Fp2<Self>> {
+        if f.is_zero() {
+            return Some(Fp2::<Bls12381>::zero());
         }
 
         // a1 = self^((p - 3) / 4)
-        let a1 = self.pow_vartime(&[
+        let a1 = f.pow_vartime(&[
             0xee7f_bfff_ffff_eaaa,
             0x07aa_ffff_ac54_ffff,
             0xd9cc_34a8_3dac_3d89,
@@ -332,9 +96,9 @@ impl<F: FpElement> Fp2<F> {
         ]);
 
         // alpha = a1^2 * self = self^((p - 3) / 2 + 1) = self^((p - 1) / 2)
-        let alpha = a1.square() * self;
+        let alpha = a1.square() * *f;
         // x0 = self^((p + 1) / 4)
-        let x0 = a1 * self;
+        let x0 = a1 * *f;
 
         if alpha == -Fp2::one() {
             // The element is order p - 1, so we're just trying to get the square of an element of the subfield F.
@@ -351,25 +115,20 @@ impl<F: FpElement> Fp2<F> {
                 0x0d00_88f5_1cbf_f34d,
             ]) * x0;
 
-            // Only return the result if it's really the square root (and so self is actually quadratic nonresidue)
-            if sqrt.square() == *self {
-                Some(sqrt)
-            } else {
-                None
-            }
+            Some(sqrt).filter(|_| sqrt.square() == *f)
         }
     }
 
     #[cfg(target_os = "zkvm")]
-    pub fn sqrt(&self) -> Option<Self> {
+    fn sqrt(f: &Fp2<Bls12381>) -> Option<Fp2<Bls12381>> {
         use sp1_zkvm::{
             io::FD_HINT,
             lib::{io, unconstrained},
         };
 
-        fn _sqrt<F: FpElement>(x: &Fp2<F>) -> Option<Fp2<F>> {
+        fn _sqrt(x: &Fp2<Bls12381>) -> Option<Fp2<Bls12381>> {
             if x.is_zero() {
-                return Some(Fp2::<F>::zero());
+                return Some(Fp2::<Bls12381>::zero());
             }
 
             // a1 = self^((p - 3) / 4)
@@ -383,9 +142,9 @@ impl<F: FpElement> Fp2<F> {
             ]);
 
             // alpha = a1^2 * self = self^((p - 3) / 2 + 1) = self^((p - 1) / 2)
-            let alpha = a1.square() * x;
+            let alpha = a1.square() * *x;
             // x0 = self^((p + 1) / 4)
-            let x0 = a1 * x;
+            let x0 = a1 * *x;
 
             if alpha == -Fp2::one() {
                 // The element is order p - 1, so we're just trying to get the square of an element of the subfield F.
@@ -413,10 +172,10 @@ impl<F: FpElement> Fp2<F> {
 
         unconstrained! {
             let mut buf = [0u8; 97];
-            match _sqrt::<F>(&self) {
+            match _sqrt(&f) {
                 Some(x) => {
                     buf[96] = 1;
-                    buf[0..96].copy_from_slice(&x.to_bytes());
+                    buf[0..96].copy_from_slice(&Bls12381::to_bytes_vec(&x));
                 }
                 None => {}
             }
@@ -426,52 +185,48 @@ impl<F: FpElement> Fp2<F> {
 
         let byte_vec: [u8; 96] = io::read_vec().try_into().unwrap();
         let is_some = io::read_vec()[0] == 1;
-        let out = Fp2::from_bytes(&byte_vec);
+        let out = Bls12381::from_bytes_slice(&byte_vec);
 
-        Some(out).filter(|_| is_some && out.square() == *self)
+        Some(out).filter(|_| is_some && out.square() == *f)
+    }
+}
+
+impl Fp2Element for Bn254 {
+    fn from_bytes_slice(bytes: &[u8]) -> Fp2<Bn254> {
+        // Split the bytes array into two 32-byte slices
+        let c0_bytes: [u8; 32] = bytes[..32].try_into().expect("slice with incorrect length");
+        let c1_bytes: [u8; 32] = bytes[32..].try_into().expect("slice with incorrect length");
+
+        // Call Bn254::from_bytes directly
+        let c0 = Bn254::from_bytes(&c0_bytes);
+        let c1 = Bn254::from_bytes(&c1_bytes);
+
+        // Create the Fp2 element
+        Fp2::new(c0, c1)
     }
 
-    #[inline]
-    pub fn lexicographically_largest(&self) -> bool {
-        self.c1.is_lexicographically_largest()
-            || (self.c1 == F::zero() && self.c0.is_lexicographically_largest())
+    fn to_bytes_vec(f: &Fp2<Bn254>) -> Vec<u8> {
+        let mut bytes = [0u8; 64];
+        bytes[..32].copy_from_slice(&Self::to_bytes(&f.c0));
+        bytes[32..].copy_from_slice(&Self::to_bytes(&f.c1));
+        bytes.to_vec()
     }
 
-    /// Computes the multiplicative inverse of this field
-    /// element, returning None in the case that this element
-    /// is zero.
     #[cfg(not(target_os = "zkvm"))]
-    pub fn invert(&self) -> Option<Self> {
-        // We wish to find the multiplicative inverse of a nonzero
-        // element a + bu in Fp2. We leverage an identity
-        //
-        // (a + bu)(a - bu) = a^2 + b^2
-        //
-        // which holds because u^2 = -1. This can be rewritten as
-        //
-        // (a + bu)(a - bu)/(a^2 + b^2) = 1
-        //
-        // because a^2 + b^2 = 0 has no nonzero solutions for (a, b).
-        // This gives that (a - bu)/(a^2 + b^2) is the inverse
-        // of (a + bu). Importantly, this can be computing using
-        // only a single inversion in F.
-
-        (self.c0.square() + self.c1.square())
-            .invert()
-            .map(|t| Fp2::new(self.c0 * t, self.c1 * -t))
+    fn invert(f: &Fp2<Self>) -> Option<Fp2<Self>> {
+        f._invert()
     }
 
     #[cfg(target_os = "zkvm")]
-    pub fn invert(&self) -> Option<Self> {
+    fn invert(&self) -> Option<Self> {
         use sp1_zkvm::{
             io::FD_HINT,
             lib::{io, unconstrained},
         };
 
-        fn _invert<F: FpElement>(x: &Fp2<F>) -> Option<Fp2<F>> {
-            (x.c0.square() + x.c1.square())
-                ._invert()
-                .map(|t| Fp2::new(x.c0 * t, x.c1 * -t))
+        fn _invert<F: Fp2Element>(x: &Fp2<F>) -> Option<Fp2<F>> {
+            let t = (x.c0.square() + x.c1.square())._invert();
+            Some(Fp2::new(x.c0 * t, x.c1 * -t)).filter(|&y| *x * y == Fp2::one())
         }
 
         unconstrained! {
@@ -495,17 +250,396 @@ impl<F: FpElement> Fp2<F> {
         Some(out).filter(|_| is_some)
     }
 
+    fn _sqrt(f: &Fp2<Self>) -> Option<Fp2<Self>> {
+        if f.is_zero() {
+            return Some(Fp2::<Bn254>::zero());
+        }
+
+        let a1 = f.pow_vartime(&[
+            0x4f082305b61f3f51,
+            0x65e05aa45a1c72a3,
+            0x6e14116da0605617,
+            0x0c19139cb84c680a,
+        ]);
+
+        let mut alpha = a1.square() * *f;
+        let x0 = (a1 * *f).frobenius_map();
+        let neg1 = Fp2::new(Bn254::one().neg(), Bn254::zero());
+
+        if x0 == neg1 {
+            Some(x0)
+        } else {
+            let mut a1 = a1 * *f;
+
+            if a1 == neg1 {
+                a1 = a1 * Fp2::new(Bn254::zero(), Bn254::one());
+            } else {
+                alpha = alpha + Fp2::one();
+                a1 = a1
+                    * alpha.pow_vartime(&[
+                        0x9e10460b6c3e7ea3,
+                        0xcbc0b548b438e546,
+                        0xdc2822db40c0ac2e,
+                        0x183227397098d014,
+                    ]);
+            }
+            Some(a1)
+        }
+    }
+
+    #[cfg(no(target_os = "zkvm"))]
+    fn sqrt(f: &Fp2<Self>) -> Option<Fp2<Self>> {
+        Fp2Element::_sqrt(f)
+    }
+
+    #[cfg(target_os = "zkvm")]
+    fn sqrt(f: &Fp2<Self>) -> Option<Fp2<Self>> {
+        use sp1_zkvm::{
+            io::FD_HINT,
+            lib::{io, unconstrained},
+        };
+
+        unconstrained! {
+            let mut buf = [0u8; 97];
+            match Fp2Element::_sqrt(&f) {
+                Some(x) => {
+                    buf[64] = 1;
+                    buf[0..64].copy_from_slice(&Fp2Element::to_bytes_vec(&x));
+                }
+                None => {}
+            }
+
+            io::write(FD_HINT, &buf);
+        }
+
+        let bytes: [u8; 65] = io::read_vec().try_into().unwrap();
+        let is_some = bytes[64] == 1;
+        let bytes = bytes[..64].try_into().unwrap();
+        let out = Bn254::from_bytes_slice(bytes);
+
+        Some(out).filter(|_| is_some)
+    }
+}
+
+#[derive(Copy, Clone)]
+/// Represents an element in the field Fp2.
+pub struct Fp2<F: Fp2Element> {
+    /// The first component of the Fp2 element.
+    pub c0: F,
+    /// The second component of the Fp2 element.
+    pub c1: F,
+}
+
+impl<F: Fp2Element> fmt::Debug for Fp2<F> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?} + {:?}*u", self.c0, self.c1)
+    }
+}
+
+impl<F: Fp2Element> Default for Fp2<F> {
+    fn default() -> Self {
+        Fp2::zero()
+    }
+}
+
+#[cfg(feature = "zeroize")]
+impl<F: Fp2Element> zeroize::DefaultIsZeroes for Fp2<F> {}
+
+impl<F: Fp2Element> From<F> for Fp2<F> {
+    fn from(f: F) -> Fp2<F> {
+        Fp2 { c0: f, c1: f }
+    }
+}
+
+impl<F: Fp2Element> From<u64> for Fp2<F> {
+    fn from(f: u64) -> Fp2<F> {
+        Fp2 {
+            c0: F::from(f),
+            c1: F::zero(),
+        }
+    }
+}
+
+impl<F: Fp2Element> Eq for Fp2<F> {}
+impl<F: Fp2Element> PartialEq for Fp2<F> {
+    #[inline]
+    fn eq(&self, other: &Self) -> bool {
+        self.c0.eq(&other.c0) & self.c1.eq(&other.c1)
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        !self.eq(other)
+    }
+}
+
+impl<'a, F: Fp2Element> Neg for &'a Fp2<F> {
+    type Output = Fp2<F>;
+
+    #[inline]
+    fn neg(self) -> Fp2<F> {
+        self.neg()
+    }
+}
+
+impl<F: Fp2Element> Neg for Fp2<F> {
+    type Output = Fp2<F>;
+
+    #[inline]
+    fn neg(self) -> Fp2<F> {
+        -&self
+    }
+}
+
+impl<F: Fp2Element> Sub<Fp2<F>> for Fp2<F> {
+    type Output = Fp2<F>;
+
+    /// Subtracts another element from this element.
+    #[cfg(not(target_os = "zkvm"))]
+    fn sub(self, rhs: Fp2<F>) -> Fp2<F> {
+        Fp2::new((&self.c0).sub(&rhs.c0), (&self.c1).sub(&rhs.c1))
+    }
+
+    /// Subtracts another element from this element.
+    #[cfg(target_os = "zkvm")]
+    fn sub(self, rhs: Fp2<F>) -> Fp2<F> {
+        unsafe {
+            let mut lhs = transmute::<Fp2<F>, [u32; 24]>(self);
+            let rhs = transmute::<Fp2<F>, [u32; 24]>(rhs);
+            syscall_bls12381_fp2_submod(lhs.as_mut_ptr(), rhs.as_ptr());
+            *transmute::<&mut [u32; 24], &Fp2<F>>(&mut lhs)
+        }
+    }
+}
+
+impl<F: Fp2Element> Add<Fp2<F>> for Fp2<F> {
+    type Output = Fp2<F>;
+
+    /// Adds another element to this element.
+    #[cfg(not(target_os = "zkvm"))]
+    fn add(self, rhs: Fp2<F>) -> Fp2<F> {
+        Fp2::new((&self.c0).add(&rhs.c0), (&self.c1).add(&rhs.c1))
+    }
+
+    /// Adds another element to this element.
+    #[cfg(target_os = "zkvm")]
+    fn add(self, rhs: Fp2<F>) -> Fp2<F> {
+        unsafe {
+            let mut lhs = transmute::<Fp2<F>, [u32; 24]>(self);
+            let rhs = transmute::<Fp2<F>, [u32; 24]>(rhs);
+            syscall_bls12381_fp2_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
+            *transmute::<&mut [u32; 24], &Fp2<F>>(&mut lhs)
+        }
+    }
+}
+
+impl<F: Fp2Element> Mul<Fp2<F>> for Fp2<F> {
+    type Output = Fp2<F>;
+
+    #[inline]
+    /// Multiplies this element by another element.
+    #[cfg(not(target_os = "zkvm"))]
+    fn mul(self, rhs: Fp2<F>) -> Fp2<F> {
+        // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
+        // computes the result as:
+        //
+        //   a·b = (a_0 b_0 + a_1 b_1 β) + (a_0 b_1 + a_1 b_0)i
+        //
+        // In BLS12-381's F_{p^2}, our β is -1, so the resulting F_{p^2} element is:
+        //
+        //   c_0 = a_0 b_0 - a_1 b_1
+        //   c_1 = a_0 b_1 + a_1 b_0
+        //
+        // Each of these is a "sum of products", which we can compute efficiently.
+
+        Fp2::new(
+            self.c0 * rhs.c0 - self.c1 * rhs.c1,
+            self.c0 * rhs.c1 + self.c1 * rhs.c0,
+        )
+    }
+
+    /// Multiplies this element by another element.
+    #[cfg(target_os = "zkvm")]
+    fn mul(self, rhs: Fp2<F>) -> Fp2<F> {
+        unsafe {
+            let mut lhs = transmute::<Fp2<F>, [u32; 24]>(self);
+            let rhs = transmute::<Fp2<F>, [u32; 24]>(rhs);
+            // bls12381_sys_bigint(&mut result, 0, lhs, rhs);
+            syscall_bls12381_fp2_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
+            *transmute::<&mut [u32; 24], &Fp2<F>>(&mut lhs)
+        }
+    }
+}
+
+impl<F: Fp2Element> Mul<F> for Fp2<F> {
+    type Output = Fp2<F>;
+
+    #[inline]
+    fn mul(self, rhs: F) -> Fp2<F> {
+        Fp2::new(self.c0 * rhs, self.c1 * rhs)
+    }
+}
+
+impl<F: Fp2Element> Div<Fp2<F>> for Fp2<F> {
+    type Output = Fp2<F>;
+
+    #[inline]
+    fn div(self, rhs: Fp2<F>) -> Fp2<F> {
+        self * rhs.invert().unwrap()
+    }
+}
+
+impl<F: Fp2Element> Fp2<F> {
+    /// Returns the zero element of Fp2.
+    #[inline]
+    pub fn zero() -> Fp2<F> {
+        Fp2::new(F::zero(), F::zero())
+    }
+
+    /// Returns the one element of Fp2.
+    #[inline]
+    pub fn one() -> Fp2<F> {
+        Fp2::new(F::one(), F::zero())
+    }
+
+    pub const fn new(c0: F, c1: F) -> Fp2<F> {
+        Fp2 { c0, c1 }
+    }
+
+    pub fn non_residue() -> Fp2<F> {
+        Fp2::new(F::one(), F::one())
+    }
+
+    pub fn is_one(&self) -> bool {
+        self.c0.is_one() && self.c1.is_zero()
+    }
+
+    /// Checks if this element is zero.
+    pub fn is_zero(&self) -> bool {
+        self.c0.is_zero() && self.c1.is_zero()
+    }
+
+    /// Generates a random element in Fp2.
+    pub fn random(mut rng: impl RngCore) -> Fp2<F> {
+        Fp2::new(F::random(&mut rng), F::random(&mut rng))
+    }
+
+    /// Raises this element to p.
+    #[inline(always)]
+    pub fn frobenius_map(&self) -> Self {
+        // This is always just a conjugation. If you're curious why, here's
+        // an article about it: https://alicebob.cryptoland.net/the-frobenius-endomorphism-with-finite-fields/
+        self.conjugate()
+    }
+
+    /// Computes the conjugate of this element.
+    #[inline(always)]
+    pub fn conjugate(&self) -> Self {
+        Fp2::new(self.c0, -self.c1)
+    }
+
+    /// Multiplies this element by the non-residue.
+    #[inline(always)]
+    pub fn mul_by_nonresidue(&self) -> Fp2<F> {
+        // Multiply a + bu by u + 1, getting
+        // au + a + bu^2 + bu
+        // and because u^2 = -1, we get
+        // (a - b) + (a + b)u
+
+        // Fp2::new(self.c0 - self.c1, self.c0 + self.c1)
+        *self * Fp2::non_residue()
+    }
+
+    /// Computes the square of this element.
+    pub fn square(&self) -> Fp2<F> {
+        // Complex squaring:
+        //
+        // v0  = c0 * c1
+        // c0' = (c0 + c1) * (c0 + \beta*c1) - v0 - \beta * v0
+        // c1' = 2 * v0
+        //
+        // In BLS12-381's F_{p^2}, our \beta is -1 so we
+        // can modify this formula:
+        //
+        // c0' = (c0 + c1) * (c0 - c1)
+        // c1' = 2 * c0 * c1
+
+        // let a = (&self.c0).add(&self.c1);
+        // let b = (&self.c0).sub(&self.c1);
+        // let c = (&self.c0).add(&self.c0);
+
+        // Fp2::new((&a).mul(&b), (&c).mul(&self.c1))
+        *self * self.clone()
+    }
+    /// Negates this element.
+    #[cfg(not(target_os = "zkvm"))]
+    pub fn neg(&self) -> Fp2<F> {
+        Fp2::new((&self.c0).neg(), (&self.c1).neg())
+    }
+
+    /// Negates this element.
+    #[cfg(target_os = "zkvm")]
+    pub fn neg(&self) -> Fp2<F> {
+        unsafe {
+            let rhs = transmute::<[u64; 6], [u32; 12]>(C::MODULUS);
+            let rhs_ptr = rhs.as_ptr();
+
+            let mut lhs_c0 = transmute::<F<F>, [u32; 12]>(self.c0);
+            syscall_bls12381_fp2_submod(lhs_c0.as_mut_ptr(), rhs_ptr);
+
+            let mut lhs_c1 = transmute::<F<F>, [u32; 12]>(self.c1);
+            syscall_bls12381_fp2_submod(lhs_c1.as_mut_ptr(), rhs_ptr);
+
+            Fp2::new(
+                F::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs_c0)),
+                F::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs_c1)),
+            )
+        }
+    }
+
+    #[inline]
+    pub fn lexicographically_largest(&self) -> bool {
+        self.c1.is_lexicographically_largest()
+            || (self.c1 == F::zero() && self.c0.is_lexicographically_largest())
+    }
+
+    /// Computes the multiplicative inverse of this field
+    /// element, returning None in the case that this element
+    /// is zero.
+    fn _invert(&self) -> Option<Self> {
+        // We wish to find the multiplicative inverse of a nonzero
+        // element a + bu in Fp2. We leverage an identity
+        //
+        // (a + bu)(a - bu) = a^2 + b^2
+        //
+        // which holds because u^2 = -1. This can be rewritten as
+        //
+        // (a + bu)(a - bu)/(a^2 + b^2) = 1
+        //
+        // because a^2 + b^2 = 0 has no nonzero solutions for (a, b).
+        // This gives that (a - bu)/(a^2 + b^2) is the inverse
+        // of (a + bu). Importantly, this can be computing using
+        // only a single inversion in F.
+
+        (self.c0.square() + self.c1.square())
+            .invert()
+            .map(|t| Fp2::new(self.c0 * t, self.c1 * -t))
+    }
+
+    pub(crate) fn invert(&self) -> Option<Self> {
+        Fp2Element::invert(self)
+    }
+
     /// Although this is labeled "vartime", it is only
     /// variable time with respect to the exponent. It
     /// is also not exposed in the public API.
-    pub fn pow_vartime(&self, by: &[u64; 6]) -> Self {
+    pub fn pow_vartime(&self, by: &[u64]) -> Self {
         let mut res = Self::one();
         for e in by.iter().rev() {
             for i in (0..64).rev() {
                 res = res.square();
 
                 if ((*e >> i) & 1) == 1 {
-                    res *= self;
+                    res = res * *self;
                 }
             }
         }
@@ -519,7 +653,7 @@ mod test {
     use crate::fp::{Bls12381, Bn254};
     use num_bigint::BigUint;
     use rand::Rng;
-    use std::mem::transmute;
+    use std::str::FromStr;
 
     fn bls12381_fp2_rand() -> Fp2<Bls12381> {
         let mut rng = rand::thread_rng();
@@ -691,7 +825,7 @@ mod test {
                 #[test]
                 fn test_lexicographic_largest() {
                     unsafe {
-                        let modulus = BigUint::from_str($curve::modulus()).unwrap();
+                        let modulus = BigUint::from_str($curve::modulus().as_str()).unwrap();
 
                         let gen_test_value = || {
                             let mut rng = rand::thread_rng();
@@ -701,7 +835,7 @@ mod test {
                             let mut a_bytes = a.to_bytes_le();
                             a_bytes.resize(48, 0);
 
-                            let a_fp = $curve::from_bytes_unsafe(&a_bytes.try_into().unwrap());
+                            let a_fp = $curve::from_bytes(&a_bytes.try_into().unwrap());
                             (a, a_inv, a_fp)
                         };
 

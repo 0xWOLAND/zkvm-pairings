@@ -8,11 +8,44 @@ use rand::RngCore;
 #[cfg(feature = "pairings")]
 use rand_core::RngCore;
 
-pub(crate) trait Fp6Element: FpElement {
+pub(crate) trait Fp6Element: Fp2Element {
+    type Fp6ElementType;
+    fn from_bytes_slice(bytes: &[u8]) -> Self::Fp6ElementType;
+    fn to_bytes_vec(f: &Self::Fp6ElementType) -> Vec<u8>;
     fn get_fp6_frobenius_coeff(i: usize) -> (Self, Self);
 }
 
 impl Fp6Element for Bls12381 {
+    type Fp6ElementType = Fp6<Bls12381>;
+    fn from_bytes_slice(bytes: &[u8]) -> Self::Fp6ElementType {
+        let mut c0_bytes = [0u8; 96];
+        let mut c1_bytes = [0u8; 96];
+        let mut c2_bytes = [0u8; 96];
+
+        c0_bytes.copy_from_slice(&bytes[0..96]);
+        c1_bytes.copy_from_slice(&bytes[96..192]);
+        c2_bytes.copy_from_slice(&bytes[192..288]);
+
+        let c0 = <Bls12381 as Fp2Element>::from_bytes_slice(&c0_bytes);
+        let c1 = <Bls12381 as Fp2Element>::from_bytes_slice(&c1_bytes);
+        let c2 = <Bls12381 as Fp2Element>::from_bytes_slice(&c2_bytes);
+
+        Fp6::<Bls12381>::new(c0, c1, c2)
+    }
+
+    fn to_bytes_vec(f: &Self::Fp6ElementType) -> Vec<u8> {
+        let mut res = [0u8; 288];
+        let c0_bytes = <Bls12381 as Fp2Element>::to_bytes_vec(&f.c0);
+        let c1_bytes = <Bls12381 as Fp2Element>::to_bytes_vec(&f.c1);
+        let c2_bytes = <Bls12381 as Fp2Element>::to_bytes_vec(&f.c2);
+
+        res[0..96].copy_from_slice(&c0_bytes);
+        res[96..192].copy_from_slice(&c1_bytes);
+        res[192..288].copy_from_slice(&c2_bytes);
+
+        res.to_vec()
+    }
+
     fn get_fp6_frobenius_coeff(pow: usize) -> (Self, Self) {
         match pow % 6 {
             0 => (Self::one(), Self::one()),
@@ -44,6 +77,7 @@ impl Fp6Element for Bls12381 {
 }
 
 impl Fp6Element for Bn254 {
+    type Fp6ElementType = Fp6<Bn254>;
     fn get_fp6_frobenius_coeff(pow: usize) -> (Self, Self) {
         match pow % 6 {
             0 => (Self::one(), Self::one()),
@@ -73,6 +107,35 @@ impl Fp6Element for Bn254 {
             _ => panic!("Invalid power"),
         }
     }
+
+    fn from_bytes_slice(bytes: &[u8]) -> Self::Fp6ElementType {
+        let mut c0_bytes = [0u8; 96];
+        let mut c1_bytes = [0u8; 96];
+        let mut c2_bytes = [0u8; 96];
+
+        c0_bytes.copy_from_slice(&bytes[0..96]);
+        c1_bytes.copy_from_slice(&bytes[96..192]);
+        c2_bytes.copy_from_slice(&bytes[192..288]);
+
+        let c0 = <Bn254 as Fp2Element>::from_bytes_slice(&c0_bytes);
+        let c1 = <Bn254 as Fp2Element>::from_bytes_slice(&c1_bytes);
+        let c2 = <Bn254 as Fp2Element>::from_bytes_slice(&c2_bytes);
+
+        Fp6::<Bn254>::new(c0, c1, c2)
+    }
+
+    fn to_bytes_vec(f: &Self::Fp6ElementType) -> Vec<u8> {
+        let mut res = [0u8; 288];
+        let c0_bytes = <Bn254 as Fp2Element>::to_bytes_vec(&f.c0);
+        let c1_bytes = <Bn254 as Fp2Element>::to_bytes_vec(&f.c1);
+        let c2_bytes = <Bn254 as Fp2Element>::to_bytes_vec(&f.c2);
+
+        res[0..96].copy_from_slice(&c0_bytes);
+        res[96..192].copy_from_slice(&c1_bytes);
+        res[192..288].copy_from_slice(&c2_bytes);
+
+        res.to_vec()
+    }
 }
 /// This represents an element $c_0 + c_1 v + c_2 v^2$ of $\mathbb{F}_{p^6} = \mathbb{F}_{p^2} / v^3 - u - 1$.
 pub struct Fp6<F: Fp6Element> {
@@ -87,6 +150,16 @@ impl<F: Fp6Element> From<F> for Fp6<F> {
             c0: Fp2::from(f),
             c1: Fp2::from(f),
             c2: Fp2::from(f),
+        }
+    }
+}
+
+impl<F: Fp6Element> From<u64> for Fp6<F> {
+    fn from(f: u64) -> Fp6<F> {
+        Fp6 {
+            c0: Fp2::from(f),
+            c1: Fp2::zero(),
+            c2: Fp2::zero(),
         }
     }
 }
@@ -164,52 +237,23 @@ impl<F: Fp6Element> Fp6<F> {
         }
     }
 
-    pub fn from_bytes(bytes: &[u8; 288]) -> Fp6<F> {
-        let mut c0_bytes = [0u8; 96];
-        let mut c1_bytes = [0u8; 96];
-        let mut c2_bytes = [0u8; 96];
-
-        c0_bytes.copy_from_slice(&bytes[0..96]);
-        c1_bytes.copy_from_slice(&bytes[96..192]);
-        c2_bytes.copy_from_slice(&bytes[192..288]);
-
-        let c0 = Fp2::from_bytes(&c0_bytes);
-        let c1 = Fp2::from_bytes(&c1_bytes);
-        let c2 = Fp2::from_bytes(&c2_bytes);
-
-        Fp6::<F>::new(c0, c1, c2)
-    }
-
-    pub fn to_bytes(&self) -> [u8; 288] {
-        let mut res = [0u8; 288];
-        let c0_bytes = self.c0.to_bytes();
-        let c1_bytes = self.c1.to_bytes();
-        let c2_bytes = self.c2.to_bytes();
-
-        res[0..96].copy_from_slice(&c0_bytes);
-        res[96..192].copy_from_slice(&c1_bytes);
-        res[192..288].copy_from_slice(&c2_bytes);
-
-        res
-    }
-
     pub fn mul_by_1(&self, c1: &Fp2<F>) -> Fp6<F> {
         Fp6 {
-            c0: (self.c2 * c1).mul_by_nonresidue(),
-            c1: self.c0 * c1,
-            c2: self.c1 * c1,
+            c0: (self.c2 * *c1).mul_by_nonresidue(),
+            c1: self.c0 * *c1,
+            c2: self.c1 * *c1,
         }
     }
 
     pub fn mul_by_01(&self, c0: &Fp2<F>, c1: &Fp2<F>) -> Fp6<F> {
-        let a_a = self.c0 * c0;
-        let b_b = self.c1 * c1;
+        let a_a = self.c0 * *c0;
+        let b_b = self.c1 * *c1;
 
-        let t1 = (self.c2 * c1).mul_by_nonresidue() + a_a;
+        let t1 = (self.c2 * *c1).mul_by_nonresidue() + a_a;
 
-        let t2 = (c0 + c1) * (self.c0 + self.c1) - a_a - b_b;
+        let t2 = (*c0 + *c1) * (self.c0 + self.c1) - a_a - b_b;
 
-        let t3 = self.c2 * c0 + b_b;
+        let t3 = self.c2 * *c0 + b_b;
 
         Fp6 {
             c0: t1,
@@ -249,6 +293,22 @@ impl<F: Fp6Element> Fp6<F> {
         Fp6 { c0, c1, c2 }
     }
 
+    pub(crate) fn nth_frobenius_map(&self, pow: usize) -> Self {
+        let c0 = self.c0.frobenius_map();
+        let c1 = self.c1.frobenius_map();
+        let c2 = self.c2.frobenius_map();
+
+        // c1 = c1 * (u + 1)^((p - 1) / 3)
+        let c1_coeffs = F::get_fp6_frobenius_coeff(pow);
+        let c1 = c1 * Fp2::new(c1_coeffs.0, c1_coeffs.1);
+
+        // c2 = c2 * (u + 1)^((2p - 2) / 3)
+        let c2_coeffs = F::get_fp6_frobenius_coeff(pow + 1);
+        let c2 = c2 * Fp2::new(c2_coeffs.0, c2_coeffs.1);
+
+        Fp6 { c0, c1, c2 }
+    }
+
     #[inline(always)]
     pub fn is_zero(&self) -> bool {
         self.c0.is_zero() & self.c1.is_zero() & self.c2.is_zero()
@@ -261,34 +321,30 @@ impl<F: Fp6Element> Fp6<F> {
 
     #[inline]
     pub fn mul_interleaved(&self, rhs: &Self) -> Self {
-        let t0 = &self.c0 * &rhs.c0;
-        let t1 = &self.c1 * &rhs.c1;
-        let t2 = &self.c2 * &rhs.c2;
-        let c0 = &self.c1 + &self.c2;
-        let tmp = &rhs.c1 + &rhs.c2;
+        let t0 = self.c0 * rhs.c0;
+        let t1 = self.c1 * rhs.c1;
+        let t2 = self.c2 * rhs.c2;
+        let c0 = self.c1 + self.c2;
+        let tmp = rhs.c1 + rhs.c2;
         let c0 = c0 * tmp;
         let tmp = t2 + t1;
         let c0 = c0 - tmp;
         let c0 = c0.mul_by_nonresidue();
         let c0 = c0 + t0;
-        let c1 = &self.c0 + &self.c1;
-        let tmp = &rhs.c0 + &rhs.c1;
+        let c1 = self.c0 + self.c1;
+        let tmp = rhs.c0 + rhs.c1;
         let c1 = c1 * tmp;
         let tmp = t0 + t1;
         let c1 = c1 - tmp;
         let tmp = t2.mul_by_nonresidue();
         let c1 = c1 + tmp;
-        let tmp = &self.c0 + &self.c2;
-        let c2 = &rhs.c0 + &rhs.c2;
+        let tmp = self.c0 + self.c2;
+        let c2 = rhs.c0 + rhs.c2;
         let c2 = c2 * tmp;
         let tmp = t0 + t2;
         let c2 = c2 - tmp;
         let c2 = c2 + t1;
         Fp6::new(c0, c1, c2)
-    }
-
-    pub fn div(&self, rhs: &Self) -> Self {
-        self * rhs.invert().unwrap()
     }
 
     #[inline]
@@ -332,20 +388,20 @@ impl<F: Fp6Element> Fp6<F> {
     }
 }
 
-impl<'a, 'b, F: Fp6Element> Mul<&'b Fp6<F>> for &'a Fp6<F> {
+impl<F: Fp6Element> Mul<Fp6<F>> for Fp6<F> {
     type Output = Fp6<F>;
 
     #[inline]
-    fn mul(self, other: &'b Fp6<F>) -> Self::Output {
-        self.mul_interleaved(other)
+    fn mul(self, other: Fp6<F>) -> Self::Output {
+        self.mul_interleaved(&other)
     }
 }
 
-impl<'a, 'b, F: Fp6Element> Add<&'b Fp6<F>> for &'a Fp6<F> {
+impl<F: Fp6Element> Add<Fp6<F>> for Fp6<F> {
     type Output = Fp6<F>;
 
     #[inline]
-    fn add(self, rhs: &'b Fp6<F>) -> Self::Output {
+    fn add(self, rhs: Fp6<F>) -> Self::Output {
         Fp6 {
             c0: self.c0 + rhs.c0,
             c1: self.c1 + rhs.c1,
@@ -376,11 +432,11 @@ impl<F: Fp6Element> Neg for Fp6<F> {
     }
 }
 
-impl<'a, 'b, F: Fp6Element> Sub<&'b Fp6<F>> for &'a Fp6<F> {
+impl<F: Fp6Element> Sub<Fp6<F>> for Fp6<F> {
     type Output = Fp6<F>;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp6<F>) -> Fp6<F> {
+    fn sub(self, rhs: Fp6<F>) -> Fp6<F> {
         Fp6 {
             c0: self.c0 - rhs.c0,
             c1: self.c1 - rhs.c1,
@@ -389,11 +445,11 @@ impl<'a, 'b, F: Fp6Element> Sub<&'b Fp6<F>> for &'a Fp6<F> {
     }
 }
 
-impl<'a, 'b, F: Fp6Element> Mul<&'b F> for &'a Fp6<F> {
+impl<F: Fp6Element> Mul<F> for Fp6<F> {
     type Output = Fp6<F>;
 
     #[inline]
-    fn mul(self, rhs: &'b F) -> Fp6<F> {
+    fn mul(self, rhs: F) -> Fp6<F> {
         Fp6 {
             c0: self.c0 * rhs,
             c1: self.c1 * rhs,
@@ -402,18 +458,19 @@ impl<'a, 'b, F: Fp6Element> Mul<&'b F> for &'a Fp6<F> {
     }
 }
 
-impl<'a, 'b, F: Fp6Element> Div<&'b Fp6<F>> for &'a Fp6<F> {
+impl<F: Fp6Element> Div<Fp6<F>> for Fp6<F> {
     type Output = Fp6<F>;
 
     #[inline]
-    fn div(self, rhs: &'b Fp6<F>) -> Fp6<F> {
-        self.div(rhs)
+    fn div(self, rhs: Fp6<F>) -> Fp6<F> {
+        self * rhs.invert().unwrap()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand::Rng;
 
     macro_rules! fp6_tests {
         ($curve:ident, $rand_fn:ident, $curve_test: ident) => {
@@ -516,13 +573,13 @@ mod tests {
                     for _ in 0..10 {
                         let a = $rand_fn();
 
-                        assert_eq!(a * $curve::zero(), Fp6::<$curve>::zero());
+                        assert_eq!(a * Fp6::<$curve>::zero(), Fp6::<$curve>::zero());
                         assert_eq!(a * Fp6::<$curve>::zero(), Fp6::<$curve>::zero());
                         assert_eq!(a * Fp6::<$curve>::one(), a);
-                        assert_eq!(a * $curve::one(), a);
-                        assert_eq!(a * $curve::from(2u64), a + a);
-                        assert_eq!(a * $curve::from(3u64), a + a + a);
-                        assert_eq!(a * $curve::from(4u64), a + a + a + a);
+                        assert_eq!(a * Fp6::<$curve>::one(), a);
+                        assert_eq!(a * Fp6::<$curve>::from(2u64), a + a);
+                        assert_eq!(a * Fp6::<$curve>::from(3u64), a + a + a);
+                        assert_eq!(a * Fp6::<$curve>::from(4u64), a + a + a + a);
                     }
                 }
 
