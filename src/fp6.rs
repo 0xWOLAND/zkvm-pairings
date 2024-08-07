@@ -2,13 +2,11 @@ use crate::fp::*;
 use crate::fp2::*;
 
 use core::fmt;
-use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use rand::RngCore;
-#[cfg(feature = "pairings")]
-use rand_core::RngCore;
 
-pub(crate) trait Fp6Element: Fp2Element {
+pub trait Fp6Element: Fp2Element {
     type Fp6ElementType;
     fn from_bytes_slice(bytes: &[u8]) -> Self::Fp6ElementType;
     fn to_bytes_vec(f: &Self::Fp6ElementType) -> Vec<u8>;
@@ -378,13 +376,11 @@ impl<F: Fp6Element> Fp6<F> {
         let tmp = ((self.c1 * c2) + (self.c2 * c1)).mul_by_nonresidue();
         let tmp = tmp + (self.c0 * c0);
 
-        let out = tmp.invert().map(|t| Fp6 {
+        tmp.invert().map(|t| Fp6 {
             c0: t * c0,
             c1: t * c1,
             c2: t * c2,
-        });
-        println!("out: {:?}", out);
-        out
+        })
     }
 }
 

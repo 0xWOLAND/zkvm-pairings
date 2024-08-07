@@ -8,8 +8,6 @@ use std::str::FromStr;
 
 use num_bigint::BigUint;
 use rand::RngCore;
-#[cfg(feature = "pairings")]
-use rand_core::RngCore;
 
 pub trait Fp12Element: Fp6Element {
     type Fp12ElementType;
