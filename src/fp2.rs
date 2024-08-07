@@ -5,7 +5,7 @@ use rand_core::RngCore;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
-        use sp1_zkvm::syscalls::{syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_submod, syscall_bls12381_fp2_mulmod};
+        use sp1_zkvm::syscalls::{syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_submod, syscall_bls12381_fp2_mulmod, syscall_bn254_fp2_addmod, syscall_bn254_fp2_submod, syscall_bn254_fp2_mulmod};
         use std::mem::transmute;
     }
 }
@@ -172,10 +172,10 @@ impl Fp2Element for Bls12381 {
     #[cfg(target_os = "zkvm")]
     fn add(lhs: &Fp2<Bls12381>, rhs: &Fp2<Bls12381>) -> Fp2<Bls12381> {
         unsafe {
-            let mut lhs = transmute::<Fp2<Bls12381>, [u32; 24]>(lhs);
-            let rhs = transmute::<Fp2<Bls12381>, [u32; 24]>(rhs);
+            let mut lhs = transmute::<Fp2<Bls12381>, [u32; 24]>(*lhs);
+            let rhs = transmute::<Fp2<Bls12381>, [u32; 24]>(*rhs);
             syscall_bls12381_fp2_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            transmute::<&mut [u32; 24], &Fp2<Bls12381>>(&mut lhs)
+            *transmute::<&mut [u32; 24], &Fp2<Bls12381>>(&mut lhs)
         }
     }
 
@@ -189,8 +189,8 @@ impl Fp2Element for Bls12381 {
     #[cfg(target_os = "zkvm")]
     fn sub(lhs: &Fp2<Bls12381>, rhs: &Fp2<Bls12381>) -> Fp2<Bls12381> {
         unsafe {
-            let mut lhs = transmute::<Fp2<Bls12381>, [u32; 24]>(lhs);
-            let rhs = transmute::<Fp2<Bls12381>, [u32; 24]>(rhs);
+            let mut lhs = transmute::<Fp2<Bls12381>, [u32; 24]>(*lhs);
+            let rhs = transmute::<Fp2<Bls12381>, [u32; 24]>(*rhs);
             syscall_bls12381_fp2_submod(lhs.as_mut_ptr(), rhs.as_ptr());
             *transmute::<&mut [u32; 24], &Fp2<Bls12381>>(&mut lhs)
         }
@@ -220,9 +220,8 @@ impl Fp2Element for Bls12381 {
     #[cfg(target_os = "zkvm")]
     fn mul(lhs: &Fp2<Bls12381>, rhs: &Fp2<Bls12381>) -> Fp2<Bls12381> {
         unsafe {
-            let mut lhs = transmute::<Fp2<Bls12381>, [u32; 24]>(self);
-            let rhs = transmute::<Fp2<Bls12381>, [u32; 24]>(rhs);
-            // bls12381_sys_bigint(&mut result, 0, lhs, rhs);
+            let mut lhs = transmute::<Fp2<Bls12381>, [u32; 24]>(*lhs);
+            let rhs = transmute::<Fp2<Bls12381>, [u32; 24]>(*rhs);
             syscall_bls12381_fp2_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
             *transmute::<&mut [u32; 24], &Fp2<Bls12381>>(&mut lhs)
         }
@@ -256,7 +255,7 @@ impl Fp2Element for Bn254 {
     }
 
     #[cfg(target_os = "zkvm")]
-    fn invert(&self) -> Option<Self> {
+    fn invert(f: &Fp2<Self>) -> Option<Fp2<Self>> {
         use sp1_zkvm::{
             io::FD_HINT,
             lib::{io, unconstrained},
@@ -264,10 +263,10 @@ impl Fp2Element for Bn254 {
 
         unconstrained! {
             let mut buf = [0u8; 65];
-            match Fp2Element::_invert(&self) {
+            match Fp2Element::_invert(f) {
                 Some(x) => {
                     buf[64] = 1;
-                    buf[0..64].copy_from_slice(&x.to_bytes());
+                    buf[0..64].copy_from_slice(&Fp2Element::to_bytes_vec(&x));
                 }
                 None => {}
             }
@@ -277,8 +276,8 @@ impl Fp2Element for Bn254 {
 
         let bytes: [u8; 65] = io::read_vec().try_into().unwrap();
         let is_some = bytes[64] == 1;
-        let bytes = bytes[..64].try_into().unwrap();
-        let out = Fp2::from_bytes(&bytes);
+        let bytes: [u8; 64] = bytes[..64].try_into().unwrap();
+        let out = Fp2Element::from_bytes_slice(&bytes);
 
         Some(out).filter(|_| is_some)
     }
@@ -363,10 +362,10 @@ impl Fp2Element for Bn254 {
     #[cfg(target_os = "zkvm")]
     fn add(lhs: &Fp2<Bn254>, rhs: &Fp2<Bn254>) -> Fp2<Bn254> {
         unsafe {
-            let mut lhs = transmute::<Fp2<Bn254>, [u32; 16]>(lhs);
-            let rhs = transmute::<Fp2<Bn254>, [u32; 16]>(rhs);
+            let mut lhs = transmute::<Fp2<Bn254>, [u32; 16]>(*lhs);
+            let rhs = transmute::<Fp2<Bn254>, [u32; 16]>(*rhs);
             syscall_bn254_fp2_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            transmute::<&mut [u32; 16], &Fp2<Bn254>>(&mut lhs)
+            *transmute::<&mut [u32; 16], &Fp2<Bn254>>(&mut lhs)
         }
     }
 
@@ -380,8 +379,8 @@ impl Fp2Element for Bn254 {
     #[cfg(target_os = "zkvm")]
     fn sub(lhs: &Fp2<Bn254>, rhs: &Fp2<Bn254>) -> Fp2<Bn254> {
         unsafe {
-            let mut lhs = transmute::<Fp2<Bn254>, [u32; 16]>(lhs);
-            let rhs = transmute::<Fp2<Bn254>, [u32; 16]>(rhs);
+            let mut lhs = transmute::<Fp2<Bn254>, [u32; 16]>(*lhs);
+            let rhs = transmute::<Fp2<Bn254>, [u32; 16]>(*rhs);
             syscall_bls12381_fp2_submod(lhs.as_mut_ptr(), rhs.as_ptr());
             *transmute::<&mut [u32; 16], &Fp2<Bn254>>(&mut lhs)
         }
@@ -411,8 +410,8 @@ impl Fp2Element for Bn254 {
     #[cfg(target_os = "zkvm")]
     fn mul(lhs: &Fp2<Bn254>, rhs: &Fp2<Bn254>) -> Fp2<Bn254> {
         unsafe {
-            let mut lhs = transmute::<Fp2<Bn254>, [u32; 16]>(self);
-            let rhs = transmute::<Fp2<Bn254>, [u32; 16]>(rhs);
+            let mut lhs = transmute::<Fp2<Bn254>, [u32; 16]>(*lhs);
+            let rhs = transmute::<Fp2<Bn254>, [u32; 16]>(*rhs);
             syscall_bls12381_fp2_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
             *transmute::<&mut [u32; 16], &Fp2<Bn254>>(&mut lhs)
         }

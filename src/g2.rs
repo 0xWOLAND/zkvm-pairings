@@ -285,7 +285,7 @@ impl<F: G2Element> G2Affine<F> {
         G2Affine { x, y, is_infinity }
     }
 
-    fn identity() -> Self {
+    pub fn identity() -> Self {
         G2Affine {
             x: Fp2::zero(),
             y: Fp2::one(),

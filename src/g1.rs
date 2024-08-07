@@ -190,7 +190,7 @@ impl<F: G1Element> G1Affine<F> {
         G1Affine { x, y, is_infinity }
     }
 
-    fn identity() -> Self {
+    pub fn identity() -> Self {
         G1Affine {
             x: F::zero(),
             y: F::one(),

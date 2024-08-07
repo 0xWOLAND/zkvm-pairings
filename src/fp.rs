@@ -1,22 +1,15 @@
 //! This module provides an implementation of the BLS12-381 base field `GF(p)`
 //! where `p = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab`
 use crate::utils::*;
-use core::fmt;
 use core::mem::transmute;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-use num_bigint::BigUint;
 use rand::RngCore;
-use sp1_zkvm::io;
-use sp1_zkvm::lib::unconstrained;
 use std::fmt::Debug;
-use std::marker::PhantomData;
 use std::str::FromStr;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
-        use sp1_zkvm::syscalls::{syscall_bls12381_fp_mulmod, syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod};
-        use sp1_zkvm::lib::syscall_bn254_fp_addmod;
-        use sp1_zkvm::lib::{io, unconstrained};
+        use sp1_zkvm::syscalls::{syscall_bls12381_fp_mulmod, syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod, syscall_bn254_fp_addmod, syscall_bn254_fp_submod, syscall_bn254_fp_mulmod};
     }
 }
 
@@ -158,7 +151,7 @@ impl FpElement for Bls12381 {
         let bytes: [u8; 48] = byte_vec.try_into().unwrap();
         unsafe {
             let inv = Self::from_bytes(&bytes);
-            Some(inv).filter(|_| !self.is_zero() && self * inv == Fp::one())
+            Some(inv).filter(|_| !self.is_zero() && *self * inv == Bls12381::one())
         }
     }
 
@@ -246,16 +239,14 @@ impl<'a> Add<&'a Bls12381> for Bls12381 {
     }
 
     #[cfg(target_os = "zkvm")]
-    fn add(&self, rhs: &'a Self) -> Self {
+    fn add(self, rhs: &'a Self) -> Self {
         const LIMBS: usize = <Bls12381 as FpElement>::LIMBS;
 
         unsafe {
             let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
             let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(rhs.0);
             syscall_bls12381_fp_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Self::from_raw_unchecked(transmute::<&mut [u32; 2 * LIMBS], &mut [u64; LIMBS]>(
-                &mut lhs,
-            ))
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(lhs))
         }
     }
 }
@@ -277,16 +268,14 @@ impl<'a> Sub<&'a Bls12381> for Bls12381 {
     }
 
     #[cfg(target_os = "zkvm")]
-    fn sub(&self, rhs: &Self) -> Self {
+    fn sub(self, rhs: &'a Self) -> Self {
         const LIMBS: usize = <Bls12381 as FpElement>::LIMBS;
 
         unsafe {
             let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
             let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(rhs.0);
             syscall_bls12381_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Self::from_raw_unchecked(transmute::<&mut [u32; 2 * LIMBS], &mut [u64; LIMBS]>(
-                &mut lhs,
-            ))
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(lhs))
         }
     }
 }
@@ -326,16 +315,14 @@ impl Mul for Bls12381 {
     }
 
     #[cfg(target_os = "zkvm")]
-    fn mul(&self, rhs: Self) -> Self {
+    fn mul(self, rhs: Self) -> Self {
         const LIMBS: usize = <Bls12381 as FpElement>::LIMBS;
 
         unsafe {
             let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
             let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(rhs.0);
             syscall_bls12381_fp_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Self::from_raw_unchecked(transmute::<&mut [u32; 2 * LIMBS], &mut [u64; LIMBS]>(
-                &mut lhs,
-            ))
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(lhs))
         }
     }
 }
@@ -393,16 +380,14 @@ impl Neg for Bls12381 {
     }
 
     #[cfg(target_os = "zkvm")]
-    fn neg(&self) -> Self {
+    fn neg(self) -> Self {
         const LIMBS: usize = <Bls12381 as FpElement>::LIMBS;
 
         unsafe {
             let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
             let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(Self::MODULUS);
             syscall_bls12381_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Self::from_raw_unchecked(transmute::<&mut [u32; 2 * LIMBS], &mut [u64; LIMBS]>(
-                &mut lhs,
-            ))
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(lhs))
         }
     }
 }
@@ -538,7 +523,7 @@ impl FpElement for Bn254 {
         let bytes: [u8; 32] = byte_vec.try_into().unwrap();
         unsafe {
             let inv = Self::from_bytes(&bytes);
-            Some(inv).filter(|_| !self.is_zero() && self * inv == Fp::one())
+            Some(inv).filter(|_| !self.is_zero() && *self * inv == Bn254::one())
         }
     }
 
@@ -606,16 +591,14 @@ impl<'a> Add<&'a Bn254> for Bn254 {
     }
 
     #[cfg(target_os = "zkvm")]
-    fn add(&self, rhs: &Self) -> Self {
-        const LIMBS: usize = <Bls12381 as FpElement>::LIMBS;
+    fn add(self, rhs: &'a Self) -> Self {
+        const LIMBS: usize = <Bn254 as FpElement>::LIMBS;
 
         unsafe {
             let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
             let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(rhs.0);
             syscall_bn254_fp_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Self::from_raw_unchecked(transmute::<&mut [u32; 2 * LIMBS], &mut [u64; LIMBS]>(
-                &mut lhs,
-            ))
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(lhs))
         }
     }
 }
@@ -637,16 +620,14 @@ impl<'a> Sub<&'a Bn254> for Bn254 {
     }
 
     #[cfg(target_os = "zkvm")]
-    fn sub(&self, rhs: &Self) -> Self {
+    fn sub(self, rhs: &'a Self) -> Self {
         const LIMBS: usize = <Bn254 as FpElement>::LIMBS;
 
         unsafe {
             let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
             let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(rhs.0);
             syscall_bn254_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Self::from_raw_unchecked(transmute::<&mut [u32; 2 * LIMBS], &mut [u64; LIMBS]>(
-                &mut lhs,
-            ))
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(lhs))
         }
     }
 }
@@ -685,16 +666,14 @@ impl Mul for Bn254 {
     }
 
     #[cfg(target_os = "zkvm")]
-    fn mul(&self, rhs: Self) -> Self {
+    fn mul(self, rhs: Self) -> Self {
         const LIMBS: usize = <Bn254 as FpElement>::LIMBS;
 
         unsafe {
             let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
             let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(rhs.0);
             syscall_bn254_fp_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Self::from_raw_unchecked(transmute::<&mut [u32; 2 * LIMBS], &mut [u64; LIMBS]>(
-                &mut lhs,
-            ))
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(lhs))
         }
     }
 }
@@ -741,16 +720,14 @@ impl Neg for Bn254 {
     }
 
     #[cfg(target_os = "zkvm")]
-    fn neg(&self) -> Self {
+    fn neg(self) -> Self {
         const LIMBS: usize = <Bn254 as FpElement>::LIMBS;
 
         unsafe {
             let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
             let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(Self::MODULUS);
             syscall_bn254_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Self::from_raw_unchecked(transmute::<&mut [u32; 2 * LIMBS], &mut [u64; LIMBS]>(
-                &mut lhs,
-            ))
+            Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(lhs))
         }
     }
 }
