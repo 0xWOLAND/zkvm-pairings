@@ -1,7 +1,10 @@
 use crate::fp::{Bls12381, Bn254, FpElement};
 use core::fmt;
 use core::ops::{Add, Div, Mul, Neg, Sub};
+use num_bigint::BigUint;
 use rand_core::RngCore;
+use std::mem::transmute;
+use std::str::FromStr;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
@@ -10,8 +13,10 @@ cfg_if::cfg_if! {
     }
 }
 pub trait Fp2Element: FpElement {
-    fn from_bytes_slice(bytes: &[u8]) -> Fp2<Self>;
+    fn from_bytes_be(bytes: &[u8]) -> Option<Fp2<Self>>;
+    fn from_bytes_unsafe(bytes: &[u8]) -> Fp2<Self>;
     fn to_bytes_vec(f: &Fp2<Self>) -> Vec<u8>;
+    fn to_bytes_vec_unsafe(f: &Fp2<Self>) -> Vec<u8>;
     fn _invert(f: &Fp2<Self>) -> Option<Fp2<Self>> {
         // (a + bu)(a - bu) = a^2 + b^2
         //
@@ -36,7 +41,19 @@ pub trait Fp2Element: FpElement {
 }
 
 impl Fp2Element for Bls12381 {
-    fn from_bytes_slice(bytes: &[u8]) -> Fp2<Bls12381> {
+    fn from_bytes_be(bytes: &[u8]) -> Option<Fp2<Bls12381>> {
+        let c0_bytes: [u8; 48] = bytes[..48].try_into().expect("slice with incorrect length");
+        let c1_bytes: [u8; 48] = bytes[48..].try_into().expect("slice with incorrect length");
+
+        let c0 = Bls12381::from_bytes_be(&c0_bytes);
+        let c1 = Bls12381::from_bytes_be(&c1_bytes);
+
+        match (c0, c1) {
+            (Some(c0), Some(c1)) => Some(Fp2::new(c0, c1)),
+            _ => None,
+        }
+    }
+    fn from_bytes_unsafe(bytes: &[u8]) -> Fp2<Bls12381> {
         let c0_bytes: [u8; 48] = bytes[..48].try_into().expect("slice with incorrect length");
         let c1_bytes: [u8; 48] = bytes[48..].try_into().expect("slice with incorrect length");
 
@@ -47,6 +64,13 @@ impl Fp2Element for Bls12381 {
     }
 
     fn to_bytes_vec(f: &Fp2<Bls12381>) -> Vec<u8> {
+        let mut bytes = [0u8; 96];
+        bytes[..48].copy_from_slice(&Self::to_bytes(f.c0));
+        bytes[48..].copy_from_slice(&Self::to_bytes(f.c1));
+        bytes.to_vec()
+    }
+
+    fn to_bytes_vec_unsafe(f: &Fp2<Bls12381>) -> Vec<u8> {
         let mut bytes = [0u8; 96];
         bytes[..48].copy_from_slice(&Self::to_bytes_unsafe(&f.c0));
         bytes[48..].copy_from_slice(&Self::to_bytes_unsafe(&f.c1));
@@ -225,7 +249,38 @@ impl Fp2Element for Bls12381 {
 }
 
 impl Fp2Element for Bn254 {
-    fn from_bytes_slice(bytes: &[u8]) -> Fp2<Bn254> {
+    fn from_bytes_be(bytes: &[u8]) -> Option<Fp2<Bn254>> {
+        // let c0 = Bn254::from_bytes_be(&bytes[..32].try_into().unwrap());
+        // let c1 = Bn254::from_bytes_be(&bytes[32..].try_into().unwrap());
+
+        // match (c0, c1) {
+        //     (Some(c0), Some(c1)) => Some(Fp2::new(c0, c1)),
+        //     _ => None,
+        // }
+
+        let a = &BigUint::from_bytes_be(bytes);
+        println!("a: {:?}", a);
+        let modulus = &BigUint::from_str(&Bn254::modulus()).unwrap();
+
+        let c0 = a % modulus;
+        let c1 = a / modulus;
+
+        println!("c0: {:?}", c0);
+        println!("c1: {:?}", c1);
+
+        assert_eq!(
+            *a,
+            c0.clone() + c1.clone() * modulus.clone(),
+            "a != c0 + c1 * modulus"
+        );
+
+        let c0 = Bn254::from_raw_unchecked(c0.to_u64_digits()[..4].try_into().unwrap());
+        let c1 = Bn254::from_raw_unchecked(c1.to_u64_digits()[..4].try_into().unwrap());
+
+        Some(Fp2::new(c0, c1))
+    }
+
+    fn from_bytes_unsafe(bytes: &[u8]) -> Fp2<Bn254> {
         // Split the bytes array into two 32-byte slices
         let c0_bytes: [u8; 32] = bytes[..32].try_into().expect("slice with incorrect length");
         let c1_bytes: [u8; 32] = bytes[32..].try_into().expect("slice with incorrect length");
@@ -239,6 +294,13 @@ impl Fp2Element for Bn254 {
     }
 
     fn to_bytes_vec(f: &Fp2<Bn254>) -> Vec<u8> {
+        let mut bytes = [0u8; 64];
+        bytes[..32].copy_from_slice(&Self::to_bytes(f.c0));
+        bytes[32..].copy_from_slice(&Self::to_bytes(f.c1));
+        bytes.to_vec()
+    }
+
+    fn to_bytes_vec_unsafe(f: &Fp2<Bn254>) -> Vec<u8> {
         let mut bytes = [0u8; 64];
         bytes[..32].copy_from_slice(&Self::to_bytes_unsafe(&f.c0));
         bytes[32..].copy_from_slice(&Self::to_bytes_unsafe(&f.c1));
@@ -414,7 +476,18 @@ impl Fp2Element for Bn254 {
     }
 }
 
-#[derive(Copy, Clone)]
+// impl Bn254 {
+//     fn divrem(&self) -> (Option<Bn254>, Bn254)  {
+//         let mut q = Some(Bn254::zero());
+//         let mut r = Bn254::zero();
+
+//         for i in (0..512).rev() {
+
+//         }
+//     }
+// }
+
+#[derive(Copy, Clone, Debug)]
 /// Represents an element in the field Fp2.
 pub struct Fp2<F: Fp2Element> {
     /// The first component of the Fp2 element.
@@ -423,11 +496,11 @@ pub struct Fp2<F: Fp2Element> {
     pub c1: F,
 }
 
-impl<F: Fp2Element> fmt::Debug for Fp2<F> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?} + {:?}*u", self.c0, self.c1)
-    }
-}
+// impl<F: Fp2Element> fmt::Debug for Fp2<F> {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "{:?} + {:?}*u", self.c0, self.c1)
+//     }
+// }
 
 impl<F: Fp2Element> Default for Fp2<F> {
     fn default() -> Self {
@@ -630,234 +703,412 @@ impl<F: Fp2Element> Fp2<F> {
 }
 
 #[cfg(test)]
-mod test {
+mod bls12_381_tests {
     use super::*;
-    use crate::fp::{Bls12381, Bn254};
     use num_bigint::BigUint;
     use rand::Rng;
     use std::str::FromStr;
 
-    fn bls12381_fp2_rand() -> Fp2<Bls12381> {
-        let mut rng = rand::thread_rng();
-        Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng))
+    fn rand_bls12_381() -> Fp2<Bls12381> {
+        Fp2::random(&mut rand::thread_rng())
     }
-
-    fn bn254_fp2_rand() -> Fp2<Bn254> {
-        let mut rng = rand::thread_rng();
-        Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng))
-    }
-
-    macro_rules! fp2_tests {
-        ($curve:ident, $rand_fn:ident, $curve_test: ident) => {
-            mod $curve_test {
-                use super::*;
-
-                #[test]
-                fn test_equality() {
-                    let rng = &mut rand::thread_rng();
-                    for _ in 0..10 {
-                        let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-                        let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-                        let a = Fp2::<$curve>::new(
-                            $curve::from_raw_unchecked(x.clone().try_into().unwrap()),
-                            $curve::from_raw_unchecked(y.clone().try_into().unwrap()),
-                        );
-                        let b = Fp2::<$curve>::new(
-                            $curve::from_raw_unchecked(x.clone().try_into().unwrap()),
-                            $curve::from_raw_unchecked(y.clone().try_into().unwrap()),
-                        );
-                        assert_eq!(a, b);
-                    }
-                }
-
-                #[test]
-                fn test_inequality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        if a != b {
-                            assert_ne!(a, b);
-                        }
-                    }
-                }
-
-                #[test]
-                fn test_addition_subtraction() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // commutative
-                        assert_eq!(a + b, b + a);
-                        assert_eq!(a + (b + c), (a + b) + c);
-
-                        // additive identity
-                        assert_eq!(a + Fp2::<$curve>::zero(), a);
-                        assert_eq!(a - Fp2::<$curve>::zero(), a);
-
-                        assert_eq!(Fp2::<$curve>::zero() - a, -a);
-                        assert_eq!(a - b, a + (-b));
-                        assert_eq!(a - b, a + (b * -Fp2::<$curve>::one()));
-
-                        assert_eq!(-a, Fp2::<$curve>::zero() - a);
-                        assert_eq!(-a, a * -Fp2::<$curve>::one());
-                    }
-                }
-
-                #[test]
-                fn test_multiplication() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // commutative
-                        assert_eq!(a * b, b * a);
-
-                        // associative
-                        assert_eq!(a * (b * c), (a * b) * c);
-
-                        // distributive
-                        assert_eq!(a * (b + c), a * b + a * c);
-                    }
-                }
-
-                #[test]
-                fn test_add_equality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-
-                        assert_eq!(a * $curve::zero(), Fp2::<$curve>::zero());
-                        assert_eq!(a * Fp2::<$curve>::zero(), Fp2::<$curve>::zero());
-                        assert_eq!(a * Fp2::<$curve>::one(), a);
-                        assert_eq!(a * $curve::one(), a);
-                        assert_eq!(a * $curve::from(2u64), a + a);
-                        assert_eq!(a * $curve::from(3u64), a + a + a);
-                        assert_eq!(a * $curve::from(4u64), a + a + a + a);
-                    }
-                }
-
-                #[test]
-                fn test_square_equality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        assert_eq!(a.square(), a * a);
-                    }
-                }
-
-                #[test]
-                fn test_pow_equality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        assert_eq!(a.pow_vartime(&[1, 0, 0, 0, 0, 0]), a);
-                        assert_eq!(a.pow_vartime(&[2, 0, 0, 0, 0, 0]), a.square());
-                        assert_eq!(a.pow_vartime(&[3, 0, 0, 0, 0, 0]), a.square() * a);
-                        assert_eq!(a.pow_vartime(&[4, 0, 0, 0, 0, 0]), a.square().square());
-                    }
-                }
-
-                #[test]
-                fn test_sqrt() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let a_sq = a.square();
-                        let a_sqrt = a_sq.sqrt();
-                        if a_sqrt.is_some().into() {
-                            assert_eq!(a_sqrt.unwrap().square(), a_sq);
-                        }
-                    }
-                }
-
-                #[test]
-                fn test_div() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // division by one
-                        assert_eq!(a / Fp2::<$curve>::one(), a);
-                        assert_eq!(a / a, Fp2::<$curve>::one());
-
-                        // division by zero
-                        assert_eq!(Fp2::<$curve>::zero() / a, Fp2::<$curve>::zero());
-
-                        // division distributivity
-                        assert_eq!((a + b) / c, a / c + b / c);
-
-                        // division and multiplication equality
-                        if !b.is_zero() {
-                            assert_eq!(a / b, a * b.invert().unwrap());
-                        }
-                    }
-                }
-
-                #[test]
-                fn test_inversion() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        if !a.is_zero() {
-                            assert_eq!(a * a.invert().unwrap(), Fp2::<$curve>::one());
-                            assert_eq!(a.invert().unwrap().invert().unwrap(), a);
-                        }
-                    }
-                }
-
-                #[test]
-                fn test_lexicographic_largest() {
-                    unsafe {
-                        let modulus = BigUint::from_str($curve::modulus().as_str()).unwrap();
-
-                        let gen_test_value = || {
-                            let mut rng = rand::thread_rng();
-                            let a: Vec<u8> = (0..48).map(|_| rng.gen()).collect();
-                            let a = BigUint::from_bytes_le(a.as_slice()) % &modulus;
-                            let a_inv = &modulus - &a;
-                            let mut a_bytes = a.to_bytes_le();
-                            a_bytes.resize(48, 0);
-
-                            let a_fp = $curve::from_bytes_unsafe(&a_bytes.try_into().unwrap());
-                            (a, a_inv, a_fp)
-                        };
-
-                        for _ in 0..100 {
-                            let (a, a_inv, a_fp) = gen_test_value();
-                            let (b, b_inv, b_fp) = gen_test_value();
-
-                            let lhs = Fp2::new(a_fp, b_fp).lexicographically_largest();
-                            let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
-
-                            assert_eq!(lhs, rhs);
-                        }
-
-                        for _ in 0..100 {
-                            let (a, a_inv, a_fp) = gen_test_value();
-                            let b = BigUint::ZERO;
-                            let b_inv = BigUint::ZERO;
-                            let b_fp = $curve::zero();
-
-                            let lhs = Fp2::new(a_fp, b_fp).lexicographically_largest();
-                            let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
-
-                            assert_eq!(lhs, rhs);
-                        }
-                    }
-                }
-            }
-        };
-    }
-
-    fp2_tests!(Bls12381, bls12381_fp2_rand, bls12381_fp2_test);
-    fp2_tests!(Bn254, bn254_fp2_rand, bn254_fp2_test);
 
     #[test]
-    fn test_frobenius() {
-        use rand::thread_rng;
+    fn test_equality() {
+        let rng = &mut rand::thread_rng();
         for _ in 0..10 {
-            let f = Fp2::<Bls12381>::random(&mut thread_rng());
-            let frob = f.frobenius_map().frobenius_map();
-            assert_eq!(f, frob);
+            let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let a = Fp2::<Bls12381>::new(
+                Bls12381::from_raw_unchecked(x.clone().try_into().unwrap()),
+                Bls12381::from_raw_unchecked(y.clone().try_into().unwrap()),
+            );
+            let b = Fp2::<Bls12381>::new(
+                Bls12381::from_raw_unchecked(x.clone().try_into().unwrap()),
+                Bls12381::from_raw_unchecked(y.clone().try_into().unwrap()),
+            );
+            assert_eq!(a, b);
+        }
+    }
+
+    #[test]
+    fn test_inequality() {
+        for _ in 0..10 {
+            let a = rand_bls12_381();
+            let b = rand_bls12_381();
+            if a != b {
+                assert_ne!(a, b);
+            }
+        }
+    }
+
+    #[test]
+    fn test_addition_subtraction() {
+        for _ in 0..10 {
+            let a = rand_bls12_381();
+            let b = rand_bls12_381();
+            let c = rand_bls12_381();
+
+            // commutative
+            assert_eq!(a + b, b + a);
+            assert_eq!(a + (b + c), (a + b) + c);
+
+            // additive identity
+            assert_eq!(a + Fp2::<Bls12381>::zero(), a);
+            assert_eq!(a - Fp2::<Bls12381>::zero(), a);
+
+            assert_eq!(Fp2::<Bls12381>::zero() - a, -a);
+            assert_eq!(a - b, a + (-b));
+            assert_eq!(a - b, a + (b * -Fp2::<Bls12381>::one()));
+
+            assert_eq!(-a, Fp2::<Bls12381>::zero() - a);
+            assert_eq!(-a, a * -Fp2::<Bls12381>::one());
+        }
+    }
+
+    #[test]
+    fn test_multiplication() {
+        for _ in 0..10 {
+            let a = rand_bls12_381();
+            let b = rand_bls12_381();
+            let c = rand_bls12_381();
+
+            // commutative
+            assert_eq!(a * b, b * a);
+
+            // associative
+            assert_eq!(a * (b * c), (a * b) * c);
+
+            // distributive
+            assert_eq!(a * (b + c), a * b + a * c);
+
+            assert_eq!(a * Fp2::<Bls12381>::zero(), Fp2::<Bls12381>::zero());
+
+            assert_eq!(a * Fp2::<Bls12381>::one(), a);
+        }
+    }
+
+    #[test]
+    fn test_add_equality() {
+        for _ in 0..10 {
+            let a = rand_bls12_381();
+
+            assert_eq!(a * Bls12381::zero(), Fp2::<Bls12381>::zero());
+            assert_eq!(a * Fp2::<Bls12381>::zero(), Fp2::<Bls12381>::zero());
+            assert_eq!(a * Fp2::<Bls12381>::one(), a);
+            assert_eq!(a * Bls12381::one(), a);
+            assert_eq!(a * Bls12381::from(2u64), a + a);
+            assert_eq!(a * Bls12381::from(3u64), a + a + a);
+            assert_eq!(a * Bls12381::from(4u64), a + a + a + a);
+        }
+    }
+
+    #[test]
+    fn test_square_equality() {
+        for _ in 0..10 {
+            let a = rand_bls12_381();
+            assert_eq!(a.square(), a * a);
+        }
+    }
+
+    #[test]
+    fn test_pow_equality() {
+        for _ in 0..10 {
+            let a = rand_bls12_381();
+            assert_eq!(a.pow_vartime(&[1, 0, 0, 0, 0, 0]), a);
+            assert_eq!(a.pow_vartime(&[2, 0, 0, 0, 0, 0]), a.square());
+            assert_eq!(a.pow_vartime(&[3, 0, 0, 0, 0, 0]), a.square() * a);
+            assert_eq!(a.pow_vartime(&[4, 0, 0, 0, 0, 0]), a.square().square());
+        }
+    }
+
+    #[test]
+    fn test_sqrt() {
+        for _ in 0..10 {
+            let a = rand_bls12_381();
+            let a_sq = a.square();
+            let a_sqrt = a_sq.sqrt();
+            if a_sqrt.is_some().into() {
+                assert_eq!(a_sqrt.unwrap().square(), a_sq);
+            }
+        }
+    }
+
+    #[test]
+    fn test_div() {
+        for _ in 0..10 {
+            let a = rand_bls12_381();
+            let b = rand_bls12_381();
+            let c = rand_bls12_381();
+
+            println!("one: {:?}", Fp2::<Bls12381>::one());
+            println!(
+                "invert(one): {:?}",
+                Fp2::<Bls12381>::one().invert().unwrap()
+            );
+
+            // division by one
+            println!("a: {:?}", a);
+            println!("a / one: {:?}", a * Fp2::<Bls12381>::one());
+
+            assert_eq!(a / Fp2::<Bls12381>::one(), a);
+            assert_eq!(a / a, Fp2::<Bls12381>::one());
+
+            // division by zero
+            assert_eq!(Fp2::<Bls12381>::zero() / a, Fp2::<Bls12381>::zero());
+
+            // division distributivity
+            assert_eq!((a + b) / c, a / c + b / c);
+
+            // division and multiplication equality
+            if !b.is_zero() {
+                assert_eq!(a / b, a * b.invert().unwrap());
+            }
+        }
+    }
+
+    #[test]
+    fn test_inversion() {
+        for _ in 0..10 {
+            let a = rand_bls12_381();
+            if !a.is_zero() {
+                assert_eq!(a * a.invert().unwrap(), Fp2::<Bls12381>::one());
+                assert_eq!(a.invert().unwrap().invert().unwrap(), a);
+            }
+        }
+    }
+
+    #[test]
+    fn test_lexicographic_largest() {
+        let modulus = BigUint::from_str(Bls12381::modulus().as_str()).unwrap();
+
+        let gen_test_value = || {
+            let mut rng = rand::thread_rng();
+            let a: Vec<u8> = (0..48).map(|_| rng.gen()).collect();
+            let a = BigUint::from_bytes_le(a.as_slice()) % &modulus;
+            let a_inv = &modulus - &a;
+            let mut a_bytes = a.to_bytes_le();
+            a_bytes.resize(48, 0);
+
+            let a_fp = Bls12381::from_bytes_unsafe(&a_bytes.try_into().unwrap());
+            (a, a_inv, a_fp)
+        };
+
+        for _ in 0..100 {
+            let (a, a_inv, a_fp) = gen_test_value();
+            let (b, b_inv, b_fp) = gen_test_value();
+
+            let lhs = Fp2::new(a_fp, b_fp).lexicographically_largest();
+            let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
+
+            assert_eq!(lhs, rhs);
+        }
+
+        for _ in 0..100 {
+            let (a, a_inv, a_fp) = gen_test_value();
+            let b = BigUint::ZERO;
+            let b_inv = BigUint::ZERO;
+            let b_fp = Bls12381::zero();
+
+            let lhs = Fp2::new(a_fp, b_fp).lexicographically_largest();
+            let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
+
+            assert_eq!(lhs, rhs);
+        }
+    }
+}
+
+#[cfg(test)]
+mod substrate_bn_tests {
+    use substrate_bn::Fq2;
+
+    use super::*;
+
+    fn rand_fq2() -> Fq2 {
+        let mut rng = rand::thread_rng();
+        Fq2::new(
+            substrate_bn::Fq::random(&mut rng),
+            substrate_bn::Fq::random(&mut rng),
+        )
+    }
+
+    fn check_eq(lhs: Fq2, rhs: Fp2<Bn254>) -> bool {
+        let lhs_bytes = fq2_to_slice(lhs);
+        let rhs_bytes: [u8; 64] = Fp2Element::to_bytes_vec(&rhs).try_into().unwrap();
+
+        lhs_bytes == rhs_bytes
+    }
+
+    fn fq2_to_slice(f: Fq2) -> [u8; 64] {
+        let mut slice = [0u8; 64];
+        f.real().to_big_endian(slice[0..32].as_mut()).unwrap();
+        f.imaginary().to_big_endian(slice[32..].as_mut()).unwrap();
+
+        slice
+    }
+
+    #[test]
+    fn test_equality() {
+        for _ in 0..10 {
+            let a_lhs = rand_fq2();
+            let a_rhs = <Bn254 as Fp2Element>::from_bytes_be(&fq2_to_slice(a_lhs)).unwrap();
+
+            assert!(check_eq(a_lhs, a_rhs), "Equality does not hold");
+        }
+    }
+
+    #[test]
+    fn test_fp2_addition() {
+        for _ in 0..10 {
+            let a_lhs = rand_fq2();
+            let b_lhs = rand_fq2();
+            let c_lhs = rand_fq2();
+
+            let a_slice = fq2_to_slice(a_lhs);
+            let b_slice = fq2_to_slice(b_lhs);
+            let c_slice = fq2_to_slice(c_lhs);
+
+            let a_rhs = <Bn254 as Fp2Element>::from_bytes_be(&a_slice).unwrap();
+            let b_rhs = <Bn254 as Fp2Element>::from_bytes_be(&b_slice).unwrap();
+            let c_rhs = <Bn254 as Fp2Element>::from_bytes_be(&c_slice).unwrap();
+            let zero_rhs = Fp2::<Bn254>::zero();
+
+            // Basic addition
+            assert!(
+                check_eq(a_lhs + b_lhs, a_rhs + b_rhs),
+                "Addition results do not match"
+            );
+
+            // Commutativity
+            assert!(
+                check_eq(b_lhs + a_lhs, b_rhs + a_rhs) && check_eq(a_lhs + b_lhs, a_rhs + b_rhs),
+                "Addition is not commutative"
+            );
+
+            // Associativity
+            assert!(
+                check_eq(a_lhs + (b_lhs + c_lhs), a_rhs + (b_rhs + c_rhs))
+                    && check_eq((a_lhs + b_lhs) + c_lhs, (a_rhs + b_rhs) + c_rhs),
+                "Addition is not associative"
+            );
+
+            // Additive identity
+            let zero_lhs = Fq2::zero();
+            assert!(
+                check_eq(a_lhs + zero_lhs, a_rhs + zero_rhs)
+                    && check_eq(a_lhs + (-a_lhs), a_rhs + (-a_rhs)),
+                "Additive inverse does not hold"
+            );
+        }
+    }
+
+    #[test]
+    fn test_fp2_subtraction() {
+        for _ in 0..10 {
+            let a_lhs = rand_fq2();
+            let b_lhs = rand_fq2();
+            let c_lhs = rand_fq2();
+
+            let a_slice = fq2_to_slice(a_lhs);
+            let b_slice = fq2_to_slice(b_lhs);
+            let c_slice = fq2_to_slice(c_lhs);
+
+            let a_rhs = <Bn254 as Fp2Element>::from_bytes_be(&a_slice).unwrap();
+            let b_rhs = <Bn254 as Fp2Element>::from_bytes_be(&b_slice).unwrap();
+            let zero_rhs = Fp2::<Bn254>::zero();
+
+            // Basic subtraction
+            assert!(
+                check_eq(a_lhs - b_lhs, a_rhs - b_rhs),
+                "Subtraction results do not match"
+            );
+
+            // Subtraction and addition
+            assert!(
+                check_eq(a_lhs - b_lhs, a_rhs + (-b_rhs))
+                    && check_eq(a_lhs + (-b_lhs), a_rhs - b_rhs),
+                "Subtraction and addition do not match"
+            );
+
+            // Subtraction and zero
+            let zero_lhs = Fq2::zero();
+            assert!(
+                check_eq(a_lhs - zero_lhs, a_rhs - zero_rhs)
+                    && check_eq(a_lhs - a_lhs, a_rhs - a_rhs),
+                "Subtraction and zero do not match"
+            );
+
+            // Subtraction and negation
+            assert!(
+                check_eq(a_lhs - b_lhs, a_rhs + (-b_rhs))
+                    && check_eq(a_lhs - b_lhs, a_rhs + (-b_rhs)),
+                "Subtraction and negation do not match"
+            );
+
+            // Subtraction and addition
+            assert!(
+                check_eq(a_lhs - b_lhs, a_rhs + (-b_rhs))
+                    && check_eq(a_lhs + (-b_lhs), a_rhs - b_rhs),
+                "Subtraction and addition do not match"
+            );
+
+            // Overflows
+            assert!(
+                check_eq(a_lhs - zero_lhs, a_rhs - zero_rhs),
+                "Subtraction overflows"
+            );
+        }
+    }
+
+    #[test]
+    fn test_fp2_multiplication() {
+        for _ in 0..10 {
+            let a_lhs = rand_fq2();
+            let b_lhs = rand_fq2();
+            let c_lhs = rand_fq2();
+
+            let a_slice = fq2_to_slice(a_lhs);
+            let b_slice = fq2_to_slice(b_lhs);
+            let c_slice = fq2_to_slice(c_lhs);
+
+            let a_rhs = <Bn254 as Fp2Element>::from_bytes_be(&a_slice).unwrap();
+            let b_rhs = <Bn254 as Fp2Element>::from_bytes_be(&b_slice).unwrap();
+            let c_rhs = <Bn254 as Fp2Element>::from_bytes_be(&c_slice).unwrap();
+            let zero_rhs = Fp2::<Bn254>::zero();
+
+            // Basic multiplication
+            assert!(
+                check_eq(a_lhs * b_lhs, a_rhs * b_rhs),
+                "Multiplication results do not match"
+            );
+
+            // Commutativity
+            assert!(
+                check_eq(b_lhs * a_lhs, b_rhs * a_rhs) && check_eq(a_lhs * b_lhs, a_rhs * b_rhs),
+                "Multiplication is not commutative"
+            );
+
+            // Associativity
+            assert!(
+                check_eq(a_lhs * (b_lhs * c_lhs), a_rhs * (b_rhs * c_rhs))
+                    && check_eq((a_lhs * b_lhs) * c_lhs, (a_rhs * b_rhs) * c_rhs),
+                "Multiplication is not associative"
+            );
+
+            // Multiplicative identity
+            let zero_lhs = Fq2::zero();
+            assert!(
+                check_eq(a_lhs * zero_lhs, a_rhs * zero_rhs)
+                    && check_eq(a_lhs * zero_lhs, zero_rhs),
+                "Multiplicative identity does not hold"
+            );
+
+            // Distributivity
+            assert!(
+                check_eq(a_lhs * (b_lhs + c_lhs), a_rhs * (b_rhs + c_rhs))
+                    && check_eq(a_lhs * b_lhs + a_lhs * c_lhs, a_rhs * b_rhs + a_rhs * c_rhs),
+                "Distributivity does not hold"
+            );
         }
     }
 }

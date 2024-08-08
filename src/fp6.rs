@@ -24,18 +24,18 @@ impl Fp6Element for Bls12381 {
         c1_bytes.copy_from_slice(&bytes[96..192]);
         c2_bytes.copy_from_slice(&bytes[192..288]);
 
-        let c0 = <Bls12381 as Fp2Element>::from_bytes_slice(&c0_bytes);
-        let c1 = <Bls12381 as Fp2Element>::from_bytes_slice(&c1_bytes);
-        let c2 = <Bls12381 as Fp2Element>::from_bytes_slice(&c2_bytes);
+        let c0 = <Bls12381 as Fp2Element>::from_bytes_unsafe(&c0_bytes);
+        let c1 = <Bls12381 as Fp2Element>::from_bytes_unsafe(&c1_bytes);
+        let c2 = <Bls12381 as Fp2Element>::from_bytes_unsafe(&c2_bytes);
 
         Fp6::<Bls12381>::new(c0, c1, c2)
     }
 
     fn to_bytes_vec(f: &Fp6<Bls12381>) -> Vec<u8> {
         let mut res = [0u8; 288];
-        let c0_bytes = <Bls12381 as Fp2Element>::to_bytes_vec(&f.c0);
-        let c1_bytes = <Bls12381 as Fp2Element>::to_bytes_vec(&f.c1);
-        let c2_bytes = <Bls12381 as Fp2Element>::to_bytes_vec(&f.c2);
+        let c0_bytes = <Bls12381 as Fp2Element>::to_bytes_vec_unsafe(&f.c0);
+        let c1_bytes = <Bls12381 as Fp2Element>::to_bytes_vec_unsafe(&f.c1);
+        let c2_bytes = <Bls12381 as Fp2Element>::to_bytes_vec_unsafe(&f.c2);
 
         res[0..96].copy_from_slice(&c0_bytes);
         res[96..192].copy_from_slice(&c1_bytes);
@@ -200,18 +200,18 @@ impl Fp6Element for Bn254 {
         c1_bytes.copy_from_slice(&bytes[96..192]);
         c2_bytes.copy_from_slice(&bytes[192..288]);
 
-        let c0 = <Bn254 as Fp2Element>::from_bytes_slice(&c0_bytes);
-        let c1 = <Bn254 as Fp2Element>::from_bytes_slice(&c1_bytes);
-        let c2 = <Bn254 as Fp2Element>::from_bytes_slice(&c2_bytes);
+        let c0 = <Bn254 as Fp2Element>::from_bytes_unsafe(&c0_bytes);
+        let c1 = <Bn254 as Fp2Element>::from_bytes_unsafe(&c1_bytes);
+        let c2 = <Bn254 as Fp2Element>::from_bytes_unsafe(&c2_bytes);
 
         Fp6::<Bn254>::new(c0, c1, c2)
     }
 
     fn to_bytes_vec(f: &Fp6<Self>) -> Vec<u8> {
         let mut res = [0u8; 288];
-        let c0_bytes = <Bn254 as Fp2Element>::to_bytes_vec(&f.c0);
-        let c1_bytes = <Bn254 as Fp2Element>::to_bytes_vec(&f.c1);
-        let c2_bytes = <Bn254 as Fp2Element>::to_bytes_vec(&f.c2);
+        let c0_bytes = <Bn254 as Fp2Element>::to_bytes_vec_unsafe(&f.c0);
+        let c1_bytes = <Bn254 as Fp2Element>::to_bytes_vec_unsafe(&f.c1);
+        let c2_bytes = <Bn254 as Fp2Element>::to_bytes_vec_unsafe(&f.c2);
 
         res[0..96].copy_from_slice(&c0_bytes);
         res[96..192].copy_from_slice(&c1_bytes);

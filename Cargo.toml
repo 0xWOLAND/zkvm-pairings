@@ -13,3 +13,6 @@ rang = "0.1.1"
 subtle = "2.6.1"
 sp1-zkvm = { path = "../sp1/zkvm/entrypoint" }
 sp1-derive = { path = "../sp1/derive" }
+substrate-bn = "0.6.0"
+crunchy = "0.2.2"
+byteorder = "1.5.0"

@@ -1,6 +1,8 @@
 use std::fmt;
 use std::ops::{Add, Mul, Neg, Sub};
 
+use substrate_bn::G1;
+
 use crate::common::AffinePoint;
 use crate::fp::{Bls12381, Bn254, FpElement};
 use crate::fr::{Fr, FrElement};
@@ -35,9 +37,9 @@ impl G1Element for Bls12381 {
             0x0,
         ]);
 
-        let p = G1Affine::new(x, y, false);
+        let p = G1Affine::from_raw_unchecked(x, y, false);
         let rhs = p.mul_by_x().mul_by_x().neg();
-        let lhs = G1Affine::new(p.x * beta, p.y, false);
+        let lhs = G1Affine::from_raw_unchecked(p.x * beta, p.y, false);
 
         (lhs == rhs)
             .then(|| ())
@@ -57,7 +59,7 @@ impl G1Element for Bls12381 {
 
             // Mask away the flag bits
             tmp[0] &= 0b0001_1111;
-            Bls12381::from_bytes(&tmp)
+            Bls12381::from_bytes_be(&tmp)
         };
 
         x.and_then(|x| {
@@ -104,7 +106,7 @@ impl G1Element for Bls12381 {
             0x08b3f481e3aaa0f1,
         ]);
 
-        G1Affine::new(G1_X, G1_Y, false)
+        G1Affine::from_raw_unchecked(G1_X, G1_Y, false)
     }
 }
 
@@ -120,52 +122,69 @@ impl G1Element for Bn254 {
             .ok_or("Point is not on curve".to_string())
     }
 
+    // `substrate-bn` uses a different encoding for compressed points
     fn from_compressed_unchecked(bytes: &[u8]) -> Option<G1Affine<Bn254>> {
-        // Obtain the three flags from the start of the byte sequence
-        let compression_flag_set = (bytes[0] >> 7) & 1 == 1;
-        let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
-        let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
+        assert_eq!(bytes.len(), 33, "Invalid compressed point length");
 
-        // Attempt to obtain the x-coordinate
-        let x = {
-            let mut tmp = [0; 32];
-            tmp.copy_from_slice(&bytes[0..32]);
+        let sign = bytes[0];
+        let x = Bn254::from_bytes_be(&bytes[1..].try_into().unwrap()).unwrap();
+        let mut y = (x.square() * x + Bn254::from(Bn254::B)).sqrt().unwrap();
 
-            // Mask away the flag bits
-            tmp[0] &= 0b0001_1111;
+        let y_bit_0 = y.to_bytes_unsafe()[0] != 0;
 
-            Bn254::from_bytes_unsafe(&tmp)
-        };
-
-        if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
-            // Infinity flag is set and x-coordinate is zero
-            Some(G1Affine::identity())
-        } else if !infinity_flag_set && compression_flag_set {
-            // Recover a y-coordinate given x by y = sqrt(x^3 + B)
-            let y_result = ((x.square() * x) + Bn254::from(Bn254::B)).sqrt();
-
-            y_result.map(|y| {
-                let y = match !(y.is_lexicographically_largest() ^ sort_flag_set) {
-                    true => y,
-                    false => -y,
-                };
-
-                G1Affine {
-                    x,
-                    y,
-                    is_infinity: infinity_flag_set,
-                }
-            })
-        } else {
-            None
+        match (sign, y_bit_0) {
+            (2, true) | (3, false) => y = -y,
+            (2, false) | (3, true) => (),
+            _ => return None,
         }
+
+        G1Affine::new(x, y)
+
+        // // Obtain the three flags from the start of the byte sequence
+        // let compression_flag_set = (bytes[0] >> 7) & 1 == 1;
+        // let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
+        // let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
+
+        // // Attempt to obtain the x-coordinate
+        // let x = {
+        //     let mut tmp = [0; 32];
+        //     tmp.copy_from_slice(&bytes[0..32]);
+
+        //     // Mask away the flag bits
+        //     tmp[0] &= 0b0001_1111;
+
+        //     Bn254::from_bytes_unsafe(&tmp)
+        // };
+
+        // if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
+        //     // Infinity flag is set and x-coordinate is zero
+        //     Some(G1Affine::identity())
+        // } else if !infinity_flag_set && compression_flag_set {
+        //     // Recover a y-coordinate given x by y = sqrt(x^3 + B)
+        //     let y_result = ((x.square() * x) + Bn254::from(Bn254::B)).sqrt();
+
+        //     y_result.map(|y| {
+        //         let y = match !(y.is_lexicographically_largest() ^ sort_flag_set) {
+        //             true => y,
+        //             false => -y,
+        //         };
+
+        //         G1Affine {
+        //             x,
+        //             y,
+        //             is_infinity: infinity_flag_set,
+        //         }
+        //     })
+        // } else {
+        //     None
+        // }
     }
 
     fn generator() -> G1Affine<Self> {
         const G1_X: Bn254 = Bn254::from_raw_unchecked([0x1, 0x0, 0x0, 0x0]);
         const G1_Y: Bn254 = Bn254::from_raw_unchecked([0x2, 0x0, 0x0, 0x0]);
 
-        G1Affine::new(G1_X, G1_Y, false)
+        G1Affine::from_raw_unchecked(G1_X, G1_Y, false)
     }
 }
 
@@ -191,7 +210,17 @@ impl<F: G1Element> fmt::Display for G1Affine<F> {
 }
 
 impl<F: G1Element> G1Affine<F> {
-    fn new(x: F, y: F, is_infinity: bool) -> Self {
+    fn new(x: F, y: F) -> Option<Self> {
+        let p = G1Affine {
+            x,
+            y,
+            is_infinity: false,
+        };
+
+        F::is_valid(&p).map(|_| p).ok()
+    }
+
+    fn from_raw_unchecked(x: F, y: F, is_infinity: bool) -> Self {
         G1Affine { x, y, is_infinity }
     }
 
@@ -382,13 +411,13 @@ mod bls12381_g1_affine_test {
             let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
             let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
-            let a = G1Affine::<Bls12381>::new(
+            let a = G1Affine::<Bls12381>::from_raw_unchecked(
                 Bls12381::from_raw_unchecked(x.clone().try_into().unwrap()),
                 Bls12381::from_raw_unchecked(y.clone().try_into().unwrap()),
                 false,
             );
 
-            let b = G1Affine::<Bls12381>::new(
+            let b = G1Affine::<Bls12381>::from_raw_unchecked(
                 Bls12381::from_raw_unchecked(x.clone().try_into().unwrap()),
                 Bls12381::from_raw_unchecked(y.clone().try_into().unwrap()),
                 false,
@@ -400,7 +429,7 @@ mod bls12381_g1_affine_test {
 
     #[test]
     fn test_valid_point() {
-        let a = G1Affine::<Bls12381>::new(
+        let a = G1Affine::<Bls12381>::from_raw_unchecked(
             Bls12381::from_raw_unchecked([
                 0x1b72cc2215a57793,
                 0x6263ee31e953a86d,
@@ -424,7 +453,7 @@ mod bls12381_g1_affine_test {
 
     #[test]
     fn test_double() {
-        let a = G1Affine::<Bls12381>::new(
+        let a = G1Affine::<Bls12381>::from_raw_unchecked(
             Bls12381::from_raw_unchecked([
                 0xfb3af00adb22c6bb,
                 0x6c55e83ff97a1aef,
@@ -443,7 +472,7 @@ mod bls12381_g1_affine_test {
             ]),
             false,
         );
-        let a_double = G1Affine::<Bls12381>::new(
+        let a_double = G1Affine::<Bls12381>::from_raw_unchecked(
             Bls12381::from_raw_unchecked([
                 0xc39a8c5529bf0f4e,
                 0xe28f75bb8f1c7c42,
@@ -464,7 +493,7 @@ mod bls12381_g1_affine_test {
         );
         assert_eq!(a.double(), a_double);
 
-        let mut b = G1Affine::<Bls12381>::new(
+        let mut b = G1Affine::<Bls12381>::from_raw_unchecked(
             Bls12381::from_raw_unchecked([
                 0x1b72cc2215a57793,
                 0x6263ee31e953a86d,
@@ -484,7 +513,7 @@ mod bls12381_g1_affine_test {
             false,
         );
 
-        let b_double = G1Affine::<Bls12381>::new(
+        let b_double = G1Affine::<Bls12381>::from_raw_unchecked(
             Bls12381::from_raw_unchecked([
                 0xd1e2c01839752ada,
                 0x2c4c7d1e2b03e6b1,
@@ -563,13 +592,13 @@ mod bn254_g1_affine_test {
             let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
             let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
-            let a = G1Affine::<Bn254>::new(
+            let a = G1Affine::<Bn254>::from_raw_unchecked(
                 Bn254::from_raw_unchecked(x.clone().try_into().unwrap()),
                 Bn254::from_raw_unchecked(y.clone().try_into().unwrap()),
                 false,
             );
 
-            let b = G1Affine::<Bn254>::new(
+            let b = G1Affine::<Bn254>::from_raw_unchecked(
                 Bn254::from_raw_unchecked(x.clone().try_into().unwrap()),
                 Bn254::from_raw_unchecked(y.clone().try_into().unwrap()),
                 false,
@@ -581,7 +610,7 @@ mod bn254_g1_affine_test {
 
     #[test]
     fn test_valid_point() {
-        let a = G1Affine::<Bn254>::new(
+        let a = G1Affine::<Bn254>::from_raw_unchecked(
             Bn254::from_raw_unchecked([
                 0x1b72cc2215a57793,
                 0x6263ee31e953a86d,
@@ -601,7 +630,7 @@ mod bn254_g1_affine_test {
 
     #[test]
     fn test_double() {
-        let a = G1Affine::<Bn254>::new(
+        let a = G1Affine::<Bn254>::from_raw_unchecked(
             Bn254::from_raw_unchecked([
                 0xfb3af00adb22c6bb,
                 0x6c55e83ff97a1aef,
@@ -616,7 +645,7 @@ mod bn254_g1_affine_test {
             ]),
             false,
         );
-        let a_double = G1Affine::<Bn254>::new(
+        let a_double = G1Affine::<Bn254>::from_raw_unchecked(
             Bn254::from_raw_unchecked([
                 0xc39a8c5529bf0f4e,
                 0xe28f75bb8f1c7c42,
@@ -633,7 +662,7 @@ mod bn254_g1_affine_test {
         );
         assert_eq!(a.double(), a_double);
 
-        let mut b = G1Affine::<Bn254>::new(
+        let mut b = G1Affine::<Bn254>::from_raw_unchecked(
             Bn254::from_raw_unchecked([
                 0x1b72cc2215a57793,
                 0x6263ee31e953a86d,
@@ -649,7 +678,7 @@ mod bn254_g1_affine_test {
             false,
         );
 
-        let b_double = G1Affine::<Bn254>::new(
+        let b_double = G1Affine::<Bn254>::from_raw_unchecked(
             Bn254::from_raw_unchecked([
                 0xd1e2c01839752ada,
                 0x2c4c7d1e2b03e6b1,
@@ -713,7 +742,7 @@ mod bn254_g1_affine_test {
 
 #[test]
 fn test_subtraction() {
-    let a = G1Affine::new(
+    let a = G1Affine::from_raw_unchecked(
         Bls12381::from_raw_unchecked([
             0x46674d90eacb7205,
             0x0c45a950ebc80888,
@@ -733,7 +762,7 @@ fn test_subtraction() {
         false,
     );
 
-    let b = G1Affine::new(
+    let b = G1Affine::from_raw_unchecked(
         Bls12381::from_raw_unchecked([
             0xc39a8c5529bf0f4e,
             0xe28f75bb8f1c7c42,
@@ -754,4 +783,37 @@ fn test_subtraction() {
     );
 
     println!("{:?}", a - b);
+}
+
+#[cfg(test)]
+mod substrate_bn_tests {
+    use super::*;
+
+    #[test]
+    fn test_from_compressed() {
+        let g1 = <Bn254 as G1Element>::from_compressed_unchecked(&[
+            2, 48, 100, 78, 114, 225, 49, 160, 41, 184, 80, 69, 182, 129, 129, 88, 93, 151, 129,
+            106, 145, 104, 113, 202, 141, 60, 32, 140, 22, 216, 124, 253, 70,
+        ])
+        .unwrap();
+
+        assert_eq!(
+            g1,
+            G1Affine::from_raw_unchecked(
+                Bn254::from_raw_unchecked([
+                    0x3c208c16d87cfd46,
+                    0x97816a916871ca8d,
+                    0xb85045b68181585d,
+                    0x30644e72e131a029,
+                ]),
+                Bn254::from_raw_unchecked([
+                    0xaefa21ec8c96a408,
+                    0xe2fcc29f8dcfec2c,
+                    0x38f09f321874ea66,
+                    0x8c6d2adffacbc84,
+                ]),
+                false
+            )
+        )
+    }
 }

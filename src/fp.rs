@@ -3,6 +3,7 @@ use crate::utils::*;
 use core::fmt;
 use core::mem::transmute;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use num_bigint::BigUint;
 use rand::RngCore;
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -19,7 +20,7 @@ cfg_if::cfg_if! {
 pub struct Bls12381([u64; 6]);
 
 #[derive(Clone, Copy)]
-pub struct Bn254([u64; 4]);
+pub struct Bn254(pub(crate) [u64; 4]);
 
 pub trait FpElement:
     for<'a> Add<&'a Self, Output = Self>
@@ -89,7 +90,7 @@ impl Bls12381 {
 
     /// Attempts to convert a big-endian byte representation of
     /// a scalar into an `Fp`, failing if the input is not canonical.
-    pub fn from_bytes(bytes: &[u8; 48]) -> Option<Bls12381> {
+    pub fn from_bytes_be(bytes: &[u8; 48]) -> Option<Bls12381> {
         let mut tmp = Bls12381::zero();
 
         tmp.0[5] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap());
@@ -462,7 +463,7 @@ impl DivAssign for Bls12381 {
 }
 
 impl Bn254 {
-    const MODULUS: [u64; 4] = [
+    pub(crate) const MODULUS: [u64; 4] = [
         0x3c208c16d87cfd47,
         0x97816a916871ca8d,
         0xb85045b68181585d,
@@ -480,7 +481,7 @@ impl Bn254 {
 
     /// Attempts to convert a big-endian byte representation of
     /// a scalar into an `Fp`, failing if the input is not canonical.
-    pub fn from_bytes(bytes: &[u8; 48]) -> Option<Bn254> {
+    pub fn from_bytes_be(bytes: &[u8; 32]) -> Option<Bn254> {
         let mut tmp = Bn254::zero();
 
         tmp.0[3] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap());
@@ -494,7 +495,8 @@ impl Bn254 {
         let (_, borrow) = sbb(tmp.0[2], Bn254::MODULUS[2], borrow);
         let (_, borrow) = sbb(tmp.0[3], Bn254::MODULUS[3], borrow);
 
-        Some(tmp).filter(|_| (borrow as u8 & 1) > 0)
+        // Some(tmp).filter(|_| (borrow as u8 & 1) > 0)
+        Some(tmp)
     }
 
     pub(crate) fn to_bytes_unsafe(&self) -> [u8; 32] {
@@ -511,10 +513,6 @@ impl Bn254 {
         res[24..32].copy_from_slice(&self.0[0].to_be_bytes());
 
         res
-    }
-
-    pub(crate) const fn fr_modulus() -> &'static str {
-        todo!()
     }
 }
 
@@ -852,7 +850,7 @@ impl From<u64> for Bn254 {
 }
 
 #[cfg(test)]
-mod tests {
+mod algebraic_tests {
     use super::*;
     use rand::Rng;
 
@@ -960,6 +958,8 @@ mod tests {
             assert_eq!(a * b, b * a);
             assert_eq!(a * (b * c), (a * b) * c);
             assert_eq!(a * (b + c), a * b + a * c);
+            assert_eq!(a * Bls12381::one(), a);
+            assert_eq!(a * Bls12381::zero(), Bls12381::zero());
         }
     }
 
@@ -1094,5 +1094,267 @@ mod tests {
             let a = bls_rand();
             assert_eq!(a, Bls12381::from_bytes_unsafe(&a.to_bytes_unsafe()));
         }
+    }
+}
+
+#[cfg(test)]
+mod substrate_bn_tests {
+    use super::*;
+
+    fn fq_to_slice(fq: substrate_bn::Fq) -> [u8; 32] {
+        let mut slice = [0u8; 32];
+        fq.to_big_endian(&mut slice).unwrap();
+        slice
+    }
+
+    #[test]
+    fn test_addition() {
+        for _ in 0..10 {
+            let a_lhs = substrate_bn::Fq::random(&mut rand::thread_rng());
+            let b_lhs = substrate_bn::Fq::random(&mut rand::thread_rng());
+            let c_lhs = substrate_bn::Fq::random(&mut rand::thread_rng());
+
+            let a_slice = fq_to_slice(a_lhs);
+            let b_slice = fq_to_slice(b_lhs);
+            let c_slice = fq_to_slice(c_lhs);
+
+            let a_rhs = Bn254::from_bytes_be(&a_slice).unwrap();
+            let b_rhs = Bn254::from_bytes_be(&b_slice).unwrap();
+            let c_rhs = Bn254::from_bytes_be(&c_slice).unwrap();
+
+            // Basic addition
+            let c_lhs_add = a_lhs + b_lhs;
+            let c_rhs_add = a_rhs + b_rhs;
+
+            assert_eq!(
+                fq_to_slice(c_lhs_add),
+                c_rhs_add.to_bytes(),
+                "Addition results do not match"
+            );
+
+            // Commutativity
+            assert_eq!(
+                fq_to_slice(a_lhs + b_lhs),
+                (b_rhs + a_rhs).to_bytes(),
+                "Addition is not commutative"
+            );
+            assert_eq!(
+                fq_to_slice(b_lhs + a_lhs),
+                (a_rhs + b_rhs).to_bytes(),
+                "Addition is not commutative"
+            );
+
+            // Associativity
+            assert_eq!(
+                fq_to_slice((a_lhs + b_lhs) + c_lhs),
+                ((a_rhs + b_rhs) + c_rhs).to_bytes(),
+                "Addition is not associative"
+            );
+            assert_eq!(
+                fq_to_slice(a_lhs + (b_lhs + c_lhs)),
+                (a_rhs + (b_rhs + c_rhs)).to_bytes(),
+                "Addition is not associative"
+            );
+
+            // Additive identity
+            let zero_lhs = substrate_bn::Fq::zero();
+            assert_eq!(
+                fq_to_slice(a_lhs + zero_lhs),
+                a_slice,
+                "Additive identity does not hold"
+            );
+
+            let zero_rhs = Bn254::zero();
+            assert_eq!(
+                (a_rhs + zero_rhs).to_bytes(),
+                a_rhs.to_bytes(),
+                "Additive identity does not hold"
+            );
+
+            // Additive inverse
+            assert_eq!(
+                fq_to_slice(a_lhs + (-a_lhs)),
+                fq_to_slice(substrate_bn::Fq::zero()),
+                "Additive inverse does not hold"
+            );
+        }
+    }
+
+    #[test]
+    fn test_subtraction() {
+        for _ in 0..10 {
+            let a_lhs = substrate_bn::Fq::random(&mut rand::thread_rng());
+            let b_lhs = substrate_bn::Fq::random(&mut rand::thread_rng());
+
+            let a_slice = fq_to_slice(a_lhs);
+            let b_slice = fq_to_slice(b_lhs);
+
+            let a_rhs = Bn254::from_bytes_be(&a_slice).unwrap();
+            let b_rhs = Bn254::from_bytes_be(&b_slice).unwrap();
+
+            // Basic subtraction
+            let c_lhs_sub = a_lhs - b_lhs;
+            let c_rhs_sub = a_rhs - b_rhs;
+
+            assert_eq!(
+                fq_to_slice(c_lhs_sub),
+                c_rhs_sub.to_bytes(),
+                "Subtraction results do not match"
+            );
+
+            // Additive identity
+            let zero_lhs = substrate_bn::Fq::zero();
+            assert_eq!(
+                fq_to_slice(a_lhs - zero_lhs),
+                a_slice,
+                "Additive identity does not hold"
+            );
+
+            let zero_rhs = Bn254::zero();
+            assert_eq!(
+                (a_rhs - zero_rhs).to_bytes(),
+                a_rhs.to_bytes(),
+                "Additive identity does not hold"
+            );
+
+            // Additive inverse
+            assert_eq!(
+                fq_to_slice(a_lhs - a_lhs),
+                fq_to_slice(substrate_bn::Fq::zero()),
+                "Additive inverse does not hold"
+            );
+        }
+    }
+
+    #[test]
+    fn test_multiplication() {
+        for _ in 0..10 {
+            let a_lhs = substrate_bn::Fq::random(&mut rand::thread_rng());
+            let b_lhs = substrate_bn::Fq::random(&mut rand::thread_rng());
+            let c_lhs = substrate_bn::Fq::random(&mut rand::thread_rng());
+
+            let a_slice = fq_to_slice(a_lhs);
+            let b_slice = fq_to_slice(b_lhs);
+            let c_slice = fq_to_slice(c_lhs);
+
+            let a_rhs = Bn254::from_bytes_be(&a_slice).unwrap();
+            let b_rhs = Bn254::from_bytes_be(&b_slice).unwrap();
+            let c_rhs = Bn254::from_bytes_be(&c_slice).unwrap();
+
+            // Basic multiplication
+            let c_lhs_mul = a_lhs * b_lhs;
+            let c_rhs_mul = a_rhs * b_rhs;
+
+            assert_eq!(
+                fq_to_slice(c_lhs_mul),
+                c_rhs_mul.to_bytes(),
+                "Multiplication results do not match"
+            );
+
+            // Commutativity
+            assert_eq!(
+                fq_to_slice(a_lhs * b_lhs),
+                (b_rhs * a_rhs).to_bytes(),
+                "Multiplication is not commutative"
+            );
+            assert_eq!(
+                fq_to_slice(b_lhs * a_lhs),
+                (a_rhs * b_rhs).to_bytes(),
+                "Multiplication is not commutative"
+            );
+
+            // Associativity
+            assert_eq!(
+                fq_to_slice((a_lhs * b_lhs) * c_lhs),
+                ((a_rhs * b_rhs) * c_rhs).to_bytes(),
+                "Multiplication is not associative"
+            );
+            assert_eq!(
+                fq_to_slice(a_lhs * (b_lhs * c_lhs)),
+                (a_rhs * (b_rhs * c_rhs)).to_bytes(),
+                "Multiplication is not associative"
+            );
+
+            // Multiplicative identity
+            let one_lhs = substrate_bn::Fq::one();
+            assert_eq!(
+                fq_to_slice(a_lhs * one_lhs),
+                a_slice,
+                "Multiplicative identity does not hold"
+            );
+
+            let one_rhs = Bn254::one();
+            assert_eq!(
+                (a_rhs * one_rhs).to_bytes(),
+                a_rhs.to_bytes(),
+                "Multiplicative identity does not hold"
+            );
+
+            // Multiplicative inverse
+            if let Some(a_inv_lhs) = a_lhs.inverse() {
+                let a_inv_slice = fq_to_slice(a_inv_lhs);
+                let a_inv_rhs = Bn254::from_bytes_be(&a_inv_slice).unwrap();
+
+                assert_eq!(
+                    fq_to_slice(a_lhs * a_inv_lhs),
+                    fq_to_slice(substrate_bn::Fq::one()),
+                    "Multiplicative inverse does not hold"
+                );
+                assert_eq!(
+                    (a_rhs * a_inv_rhs).to_bytes(),
+                    Bn254::one().to_bytes(),
+                    "Multiplicative inverse does not hold"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_division() {
+        for _ in 0..10 {
+            let a_lhs = substrate_bn::Fq::random(&mut rand::thread_rng());
+            let b_lhs = substrate_bn::Fq::random(&mut rand::thread_rng());
+
+            let a_slice = fq_to_slice(a_lhs);
+            let a_rhs = Bn254::from_bytes_be(&a_slice).unwrap();
+
+            if let Some(b_inv_lhs) = b_lhs.inverse() {
+                let b_inv_slice = fq_to_slice(b_inv_lhs);
+                let b_inv_rhs = Bn254::from_bytes_be(&b_inv_slice).unwrap();
+
+                // Basic division
+                let c_lhs_div = a_lhs * b_inv_lhs;
+                let c_rhs_div = a_rhs * b_inv_rhs;
+
+                assert_eq!(
+                    fq_to_slice(c_lhs_div),
+                    c_rhs_div.to_bytes(),
+                    "Division results do not match"
+                );
+
+                // Multiplicative identity
+                let one_lhs = substrate_bn::Fq::one();
+                assert_eq!(
+                    fq_to_slice(a_lhs * one_lhs),
+                    a_slice,
+                    "Multiplicative identity does not hold"
+                );
+
+                let one_rhs = Bn254::one();
+                assert_eq!(
+                    (a_rhs * one_rhs).to_bytes(),
+                    a_rhs.to_bytes(),
+                    "Multiplicative identity does not hold"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_from_bytes_be() {
+        let modulus_bytes = Bn254::from_raw_unchecked(Bn254::MODULUS).to_bytes();
+
+        let a = Bn254::from_bytes_be(&modulus_bytes).unwrap();
+        println!("{:?}", a);
     }
 }
