@@ -1,3 +1,4 @@
+use std::fmt;
 use std::ops::{Add, Mul, Neg, Sub};
 
 use crate::common::AffinePoint;
@@ -56,32 +57,33 @@ impl G1Element for Bls12381 {
 
             // Mask away the flag bits
             tmp[0] &= 0b0001_1111;
-
             Bls12381::from_bytes(&tmp)
         };
 
-        if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
-            // Infinity flag is set and x-coordinate is zero
-            Some(G1Affine::identity())
-        } else if !infinity_flag_set && compression_flag_set {
-            // Recover a y-coordinate given x by y = sqrt(x^3 + B)
-            let y_result = ((x.square() * x) + Bls12381::from(Bls12381::B)).sqrt();
+        x.and_then(|x| {
+            if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
+                // Infinity flag is set and x-coordinate is zero
+                Some(G1Affine::identity())
+            } else if !infinity_flag_set && compression_flag_set {
+                // Recover a y-coordinate given x by y = sqrt(x^3 + B)
+                let y_result = ((x.square() * x) + Bls12381::from(Bls12381::B)).sqrt();
 
-            y_result.map(|y| {
-                let y = match !(y.is_lexicographically_largest() ^ sort_flag_set) {
-                    true => y,
-                    false => -y,
-                };
+                y_result.map(|y| {
+                    let y = match !(y.is_lexicographically_largest() ^ sort_flag_set) {
+                        true => y,
+                        false => -y,
+                    };
 
-                G1Affine {
-                    x,
-                    y,
-                    is_infinity: infinity_flag_set,
-                }
-            })
-        } else {
-            None
-        }
+                    G1Affine {
+                        x,
+                        y,
+                        is_infinity: infinity_flag_set,
+                    }
+                })
+            } else {
+                None
+            }
+        })
     }
 
     fn generator() -> G1Affine<Self> {
@@ -132,7 +134,7 @@ impl G1Element for Bn254 {
             // Mask away the flag bits
             tmp[0] &= 0b0001_1111;
 
-            Bn254::from_bytes(&tmp)
+            Bn254::from_bytes_unsafe(&tmp)
         };
 
         if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
@@ -182,8 +184,11 @@ impl<F: G1Element> PartialEq for G1Affine<F> {
 
 impl<F: G1Element> Eq for G1Affine<F> {}
 
-// impl<F: G1Element<G1AffineType = G1Affine<F>>> G1Affine<F> {
-// }
+impl<F: G1Element> fmt::Display for G1Affine<F> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 impl<F: G1Element> G1Affine<F> {
     fn new(x: F, y: F, is_infinity: bool) -> Self {
@@ -698,4 +703,55 @@ mod bn254_g1_affine_test {
             assert_eq!(lhs, rhs);
         }
     }
+
+    // #[test]
+    // fn test_print() {
+    //     let x = G1Affine::<Bls12381>::generator();
+    //     println!("{:?}", x);
+    // }
+}
+
+#[test]
+fn test_subtraction() {
+    let a = G1Affine::new(
+        Bls12381::from_raw_unchecked([
+            0x46674d90eacb7205,
+            0x0c45a950ebc80888,
+            0x2501289130db2197,
+            0x2aa658c30a2d9043,
+            0x427c1c8fbb758fe2,
+            0x4e0fbf29558c9ac3,
+        ]),
+        Bls12381::from_raw_unchecked([
+            0x4c52672dc1d9c955,
+            0x2828434a1c865ae6,
+            0xc4ba18aead4e0a79,
+            0x99f293a2b82be775,
+            0xd32883e86504d0f7,
+            0x0da14107c936b771,
+        ]),
+        false,
+    );
+
+    let b = G1Affine::new(
+        Bls12381::from_raw_unchecked([
+            0xc39a8c5529bf0f4e,
+            0xe28f75bb8f1c7c42,
+            0x43902d0ac358a62a,
+            0x9721db3091280125,
+            0x8808c8eb50a9450c,
+            0x0572cbea904d6746,
+        ]),
+        Bls12381::from_raw_unchecked([
+            0xba86881979749d28,
+            0x4c56d9d4cd16bd1b,
+            0xf73bb9021d5fd76a,
+            0x22ba3ecb8670e461,
+            0x22fda673779d8e38,
+            0x166a9d8cabc673a3,
+        ]),
+        false,
+    );
+
+    println!("{:?}", a - b);
 }

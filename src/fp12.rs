@@ -14,6 +14,12 @@ pub trait Fp12Element: Fp6Element {
     fn from_bytes_slice(bytes: &[u8]) -> Self::Fp12ElementType;
     fn to_bytes_vec(value: &Self::Fp12ElementType) -> Vec<u8>;
     fn get_fp12_frobenius_coeffs(pow: usize) -> [Self; 2];
+    fn _invert(f: &Fp12<Self>) -> Option<Fp12<Self>> {
+        (f.c0.square() - f.c1.square().mul_by_nonresidue())
+            .invert()
+            .map(|t| Fp12::new(f.c0 * t, f.c1 * -t))
+    }
+    fn invert(f: &Fp12<Self>) -> Option<Fp12<Self>>;
 }
 
 impl Fp12Element for Bls12381 {
@@ -40,24 +46,24 @@ impl Fp12Element for Bls12381 {
                 ]),
             ],
             2 => [
-                Self::from_raw_unchecked([
-                    0x2e01fffffffeffff,
-                    0xde17d813620a0002,
-                    0xddb3a93be6f89688,
-                    0xba69c6076a0f77ea,
-                    0x5f19672fdf76ce51,
-                    0x0000000000000000,
-                ]),
                 Self::zero(),
+                Self::from_raw_unchecked([
+                    0x8bfd00000000aaac,
+                    0x409427eb4f49fffd,
+                    0x897d29650fb85f9b,
+                    0xaa0d857d89759ad4,
+                    0xec02408663d4de85,
+                    0x1a0111ea397fe699,
+                ]),
             ],
             3 => [
                 Self::from_raw_unchecked([
-                    0xf1ee7b04121bdea2,
-                    0x304466cf3e67fa0a,
-                    0xef396489f61eb45e,
-                    0x1c3dedd930b1cf60,
-                    0xe2e9c448d77a2cd9,
-                    0x135203e60180a68e,
+                    0xc81084fbede3cc09,
+                    0xee67992f72ec05f4,
+                    0x77f76e17009241c5,
+                    0x48395dabc2d3435e,
+                    0x6831e36d6bd17ffe,
+                    0x06af0e0437ff400b,
                 ]),
                 Self::from_raw_unchecked([
                     0xc81084fbede3cc09,
@@ -70,24 +76,16 @@ impl Fp12Element for Bls12381 {
             ],
             4 => [
                 Self::from_raw_unchecked([
-                    0x2e01fffffffefffe,
-                    0xde17d813620a0002,
-                    0xddb3a93be6f89688,
-                    0xba69c6076a0f77ea,
-                    0x5f19672fdf76ce51,
-                    0x0000000000000000,
+                    0x8bfd00000000aaad,
+                    0x409427eb4f49fffd,
+                    0x897d29650fb85f9b,
+                    0xaa0d857d89759ad4,
+                    0xec02408663d4de85,
+                    0x1a0111ea397fe699,
                 ]),
                 Self::zero(),
             ],
             5 => [
-                Self::from_raw_unchecked([
-                    0x1ee605167ff82995,
-                    0x5871c1908bd478cd,
-                    0xdb45f3536814f0bd,
-                    0x70df3560e77982d0,
-                    0x6bd3ad4afa99cc91,
-                    0x144e4211384586c1,
-                ]),
                 Self::from_raw_unchecked([
                     0x9b18fae980078116,
                     0xc63a3e6e257f8732,
@@ -96,8 +94,17 @@ impl Fp12Element for Bls12381 {
                     0xdf47fa6b48b1e045,
                     0x05b2cfd9013a5fd8,
                 ]),
+                Self::from_raw_unchecked([
+                    0x1ee605167ff82995,
+                    0x5871c1908bd478cd,
+                    0xdb45f3536814f0bd,
+                    0x70df3560e77982d0,
+                    0x6bd3ad4afa99cc91,
+                    0x144e4211384586c1,
+                ]),
             ],
             6 => [
+                Self::zero(),
                 Self::from_raw_unchecked([
                     0xb9feffffffffaaaa,
                     0x1eabfffeb153ffff,
@@ -106,7 +113,6 @@ impl Fp12Element for Bls12381 {
                     0x4b1ba7b6434bacd7,
                     0x1a0111ea397fe69a,
                 ]),
-                Self::zero(),
             ],
             7 => [
                 Self::from_raw_unchecked([
@@ -118,12 +124,12 @@ impl Fp12Element for Bls12381 {
                     0x00fc3e2b36c4e032,
                 ]),
                 Self::from_raw_unchecked([
-                    0x8d0775ed92235fb8,
-                    0xf67ea53d63e7813d,
-                    0x7b2443d784bab9c4,
-                    0x0fd603fd3cbd5f4f,
-                    0xc231beb4202c0d1f,
-                    0x1904d3bf02bb0667,
+                    0x2cf78a126ddc4af3,
+                    0x282d5ac14d6c7ec2,
+                    0xec0c8ec971f63c5f,
+                    0x54a14787b6c7b36f,
+                    0x88e9e902231f9fb8,
+                    0x00fc3e2b36c4e032,
                 ]),
             ],
             8 => [
@@ -139,6 +145,17 @@ impl Fp12Element for Bls12381 {
             ],
             9 => [
                 Self::from_raw_unchecked([
+                    0x8bfd00000000aaac,
+                    0x409427eb4f49fffd,
+                    0x897d29650fb85f9b,
+                    0xaa0d857d89759ad4,
+                    0xec02408663d4de85,
+                    0x1a0111ea397fe699,
+                ]),
+                Self::zero(),
+            ],
+            10 => [
+                Self::from_raw_unchecked([
                     0xc81084fbede3cc09,
                     0xee67992f72ec05f4,
                     0x77f76e17009241c5,
@@ -155,33 +172,15 @@ impl Fp12Element for Bls12381 {
                     0x135203e60180a68e,
                 ]),
             ],
-            10 => [
-                Self::from_raw_unchecked([
-                    0x8bfd00000000aaad,
-                    0x409427eb4f49fffd,
-                    0x897d29650fb85f9b,
-                    0xaa0d857d89759ad4,
-                    0xec02408663d4de85,
-                    0x1a0111ea397fe699,
-                ]),
-                Self::zero(),
-            ],
             11 => [
+                Self::zero(),
                 Self::from_raw_unchecked([
-                    0x9b18fae980078116,
-                    0xc63a3e6e257f8732,
-                    0x8beadf4d8e9c0566,
-                    0xf39816240c0b8fee,
-                    0xdf47fa6b48b1e045,
-                    0x05b2cfd9013a5fd8,
-                ]),
-                Self::from_raw_unchecked([
-                    0x1ee605167ff82995,
-                    0x5871c1908bd478cd,
-                    0xdb45f3536814f0bd,
-                    0x70df3560e77982d0,
-                    0x6bd3ad4afa99cc91,
-                    0x144e4211384586c1,
+                    0x2e01fffffffefffe,
+                    0xde17d813620a0002,
+                    0xddb3a93be6f89688,
+                    0xba69c6076a0f77ea,
+                    0x5f19672fdf76ce51,
+                    0x0000000000000000,
                 ]),
             ],
             _ => unimplemented!(),
@@ -203,6 +202,39 @@ impl Fp12Element for Bls12381 {
         res[288..].copy_from_slice(&c1);
 
         res.to_vec()
+    }
+
+    #[cfg(not(target_os = "zkvm"))]
+    fn invert(f: &Fp12<Self>) -> Option<Fp12<Self>> {
+        Fp12Element::_invert(f)
+    }
+
+    #[cfg(target_os = "zkvm")]
+    fn invert(f: &Fp12<Self>) -> Option<Fp12<Self>> {
+        use sp1_zkvm::{
+            io::FD_HINT,
+            lib::{io, unconstrained},
+        };
+
+        unconstrained! {
+            let mut buf = [0u8; 577];
+            match Fp12Element::_invert(&f) {
+                Some(x) => {
+                    buf[576] = 1;
+                    buf[0..576].copy_from_slice(&<Self as Fp12Element>::to_bytes_vec(&x));
+                }
+                None => {}
+            }
+
+            io::write(FD_HINT, &buf);
+        }
+
+        let bytes: [u8; 577] = io::read_vec().try_into().unwrap();
+        let is_some = bytes[576] == 1;
+        let bytes = bytes[..576].try_into().unwrap();
+        let out = <Self as Fp12Element>::from_bytes_slice(bytes);
+
+        Some(out).filter(|_| is_some)
     }
 }
 
@@ -267,6 +299,39 @@ impl Fp12Element for Bn254 {
         res[288..].copy_from_slice(&c1);
 
         res.to_vec()
+    }
+
+    #[cfg(not(target_os = "zkvm"))]
+    fn invert(f: &Fp12<Self>) -> Option<Fp12<Self>> {
+        Fp12Element::_invert(f)
+    }
+
+    #[cfg(target_os = "zkvm")]
+    fn invert(f: &Fp12<Self>) -> Option<Fp12<Self>> {
+        use sp1_zkvm::{
+            io::FD_HINT,
+            lib::{io, unconstrained},
+        };
+
+        unconstrained! {
+            let mut buf = [0u8; 513];
+            match Fp12Element::_invert(&f) {
+                Some(x) => {
+                    buf[512] = 1;
+                    buf[0..512].copy_from_slice(&<Self as Fp12Element>::to_bytes_vec(&x));
+                }
+                None => {}
+            }
+
+            io::write(FD_HINT, &buf);
+        }
+
+        let bytes: [u8; 513] = io::read_vec().try_into().unwrap();
+        let is_some = bytes[512] == 1;
+        let bytes = bytes[..512].try_into().unwrap();
+        let out = <Self as Fp12Element>::from_bytes_slice(bytes);
+
+        Some(out).filter(|_| is_some)
     }
 }
 
@@ -511,16 +576,16 @@ impl<F: Fp12Element> Fp12<F> {
         Fp12::new(c0, c1)
     }
 
-    #[inline(always)]
-    pub(crate) fn nth_frobenius_map(&self, pow: usize) -> Self {
-        let c0 = self.c0.nth_frobenius_map(pow);
-        let c1 = self.c1.nth_frobenius_map(pow);
+    // #[inline(always)]
+    // pub(crate) fn nth_frobenius_map(&self, pow: usize) -> Self {
+    //     let c0 = self.c0.nth_frobenius_map(pow);
+    //     let c1 = self.c1.nth_frobenius_map(pow);
 
-        let frob_coeffs = F::get_fp12_frobenius_coeffs(pow);
-        let c1 = c1 * Fp6::from(Fp2::new(frob_coeffs[0], frob_coeffs[1]));
+    //     let frob_coeffs = F::get_fp12_frobenius_coeffs(pow);
+    //     let c1 = c1 * Fp6::from(Fp2::new(frob_coeffs[0], frob_coeffs[1]));
 
-        Fp12::new(c0, c1)
-    }
+    //     Fp12::new(c0, c1)
+    // }
 
     #[inline]
     pub fn square(&self) -> Self {
@@ -620,7 +685,6 @@ impl<'a, 'b, F: Fp12Element> Div<&'b Fp12<F>> for &'a Fp12<F> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::Rng;
 
     macro_rules! fp12_tests {
         ($curve:ident, $rand_fn:ident, $curve_test:ident) => {
@@ -713,8 +777,18 @@ mod tests {
                 fn test_frobenius() {
                     for _ in 0..10 {
                         let a = $rand_fn();
-                        let b = (0..12).fold(a, |acc, _| acc.frobenius_map());
-                        assert_eq!(a, b);
+                        {
+                            let b = (0..12).fold(a, |acc, _| acc.frobenius_map());
+                            assert_eq!(a, b);
+                        }
+                        // {
+                        //     let k = rand::random::<usize>() % 12;
+                        //     println!("k = {}", k);
+                        //     let lhs = a.nth_frobenius_map(k);
+                        //     let rhs = (0..k).fold(a, |acc, _| acc.frobenius_map());
+
+                        //     assert_eq!(lhs, rhs);
+                        // }
                     }
                 }
 

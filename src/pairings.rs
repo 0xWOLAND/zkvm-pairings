@@ -290,21 +290,21 @@ pub fn final_exponentiation<F: Fp12Element + AffinePoint>(&f: &Fp12<F>) -> Fp12<
     }
 
     let mut f = f.clone();
-    // let mut t0 = f
-    //     .frobenius_map()
-    //     .frobenius_map()
-    //     .frobenius_map()
-    //     .frobenius_map()
-    //     .frobenius_map()
-    //     .frobenius_map();
-    let mut t0 = f.nth_frobenius_map(6);
+    let mut t0 = f
+        .frobenius_map()
+        .frobenius_map()
+        .frobenius_map()
+        .frobenius_map()
+        .frobenius_map()
+        .frobenius_map();
+    // let mut t0 = fh_frobenius_map(6);
 
     f.invert()
         .map(|mut t1| {
             let mut t2 = t0 * t1;
             t1 = t2;
-            // t2 = t2.frobenius_map().frobenius_map();
-            t2 = t2.nth_frobenius_map(2);
+            t2 = t2.frobenius_map().frobenius_map();
+            // t2 = t2.nth_frobenius_map(2);
             t2 = t2 * t1;
             t1 = cyclotomic_square(t2).conjugate();
             let mut t3 = cycolotomic_exp(t2);
@@ -319,13 +319,13 @@ pub fn final_exponentiation<F: Fp12Element + AffinePoint>(&f: &Fp12<F>) -> Fp12<
             t4 = t4 * t5 * t2;
             t5 = t2.conjugate();
             t1 = t1 * t2;
-            // t1 = t1.frobenius_map().frobenius_map().frobenius_map();
-            t1 = t1.nth_frobenius_map(3);
+            t1 = t1.frobenius_map().frobenius_map().frobenius_map();
+            // t1 = t1.nth_frobenius_map(3);
             t6 = t6 * t5;
             t6 = t6.frobenius_map();
             t3 = t3 * t0;
-            // t3 = t3.frobenius_map().frobenius_map();
-            t3 = t3.nth_frobenius_map(2);
+            t3 = t3.frobenius_map().frobenius_map();
+            // t3 = t3.nth_frobenius_map(2);
             t3 = t3 * t1;
             t3 = t3 * t6;
             f = t3 * t4;
@@ -339,262 +339,10 @@ pub fn verify_pairing<F: Fp12Element + G1Element + G2Element>(
     p: &[G1Affine<F>],
     q: &[G2Affine<F>],
 ) -> bool {
-    println!("cycle-tracker-start: miller-loop");
     let q = q
         .iter()
         .map(|q| G2Prepared::from(*q))
         .collect::<Vec<G2Prepared<F>>>();
-    println!("cycle-tracker-end: miller-loop");
-    println!("cycle-tracker-start: multi-miller-loop");
     let f = multi_miller_loop(p, &q);
-    println!("cycle-tracker-end: multi-miller-loop");
-    println!("cycle-tracker-start: final-exponentiation");
-    let out = final_exponentiation(&f) == Fp12::<F>::one();
-    println!("cycle-tracker-end: final-exponentiation");
-    out
+    final_exponentiation(&f) == Fp12::<F>::one()
 }
-
-// // #[cfg(test)]
-// // mod test {
-// //     use std::str::FromStr;
-
-// //     use crate::{common::Bls12381Curve, fr::Fr};
-// //     use num_bigint::BigUint;
-// //     use rand::thread_rng;
-
-// //     use super::*;
-
-// //     fn _final_exponentiation(x: &Fp12<Bls12381Curve>) -> Fp12<Bls12381Curve> {
-// //         let h: &BigUint= &BigUint::from_str("322277361516934140462891564586510139908379969514828494218366688025288661041104682794998680497580008899973249814104447692778988208376779573819485263026159588510513834876303014016798809919343532899164848730280942609956670917565618115867287399623286813270357901731510188149934363360381614501334086825442271920079363289954510565375378443704372994881406797882676971082200626541916413184642520269678897559532260949334760604962086348898118982248842634379637598665468817769075878555493752214492790122785850202957575200176084204422751485957336465472324810982833638490904279282696134323072515220044451592646885410572234451732790590013479358343841220074174848221722017083597872017638514103174122784843925578370430843522959600095676285723737049438346544753168912974976791528535276317256904336520179281145394686565050419250614107803233314658825463117900250701199181529205942363159325765991819433914303908860460720581408201373164047773794825411011922305820065611121544561808414055302212057471395719432072209245600258134364584636810093520285711072578721435517884103526483832733289802426157301542744476740008494780363354305116978805620671467071400711358839553375340724899735460480144599782014906586543813292157922220645089192130209334926661588737007768565838519456601560804957985667880395221049249803753582637708560").unwrap();
-// //         x.pow_vartime_extended(&h.to_u64_digits())
-// //     }
-
-// //     #[test]
-// //     fn test_final_exponentiation() {
-// //         for _ in 0..10 {
-// //             let f = Fp12::<Bls12381Curve>::random(&mut thread_rng());
-// //             // let challenge = Fp::<Bls12381Curve>::random(&mut thread_rng());
-// //             // let f = Fp12::<Bls12381Curve>::one() * challenge;
-// //             let lhs = final_exponentiation(&f);
-// //             let rhs = _final_exponentiation(&f);
-// //             assert_eq!(lhs, rhs);
-// //         }
-// //     }
-
-// //     #[test]
-// //     fn test_random_points() {
-// //         for _ in 0..1 {
-// //             {
-// //                 let p1 = &G1Affine::<Bls12381Curve>::generator()
-// //                     * &Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let q1 = &G2Affine::<Bls12381Curve>::generator()
-// //                     * &Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let p2 = &G1Affine::<Bls12381Curve>::generator()
-// //                     * &Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let q2 = -G2Affine::<Bls12381Curve>::generator()
-// //                     * &Fr::<Bls12381Curve>::random(&mut thread_rng());
-
-// //                 let eq_class =
-// //                     multi_miller_loop(&[p1, p2], &[G2Prepared::from(q1), G2Prepared::from(q2)]);
-// //                 let rhs = final_exponentiation(&eq_class) == Fp12::<Bls12381Curve>::one();
-// //                 let lhs = verify_pairing(&[p1, p2], &[q1, q2]);
-
-// //                 assert_eq!(lhs, rhs);
-// //             }
-// //             {
-// //                 let p1 = &G1Affine::<Bls12381Curve>::generator()
-// //                     * &Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let q1 = &G2Affine::<Bls12381Curve>::generator()
-// //                     * &Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let p2 = &G1Affine::<Bls12381Curve>::generator()
-// //                     * &Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let q2 = -G2Affine::<Bls12381Curve>::generator()
-// //                     * &Fr::<Bls12381Curve>::random(&mut thread_rng());
-
-// //                 let eq_class =
-// //                     multi_miller_loop(&[p1, p2], &[G2Prepared::from(q1), G2Prepared::from(q2)]);
-// //                 let rhs = final_exponentiation(&eq_class) == Fp12::<Bls12381Curve>::one();
-// //                 let lhs = verify_pairing(&[p1, p2], &[q1, q2]);
-
-// //                 assert_eq!(lhs, rhs);
-// //             }
-// //         }
-// //     }
-
-// //     #[test]
-// //     fn test_bilinearity() {
-// //         for _ in 0..1 {
-// //             {
-// //                 let a = Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let b = Fr::<Bls12381Curve>::random(&mut thread_rng());
-
-// //                 let p1 = &G1Affine::<Bls12381Curve>::generator() * a;
-// //                 let q1 = &G2Affine::<Bls12381Curve>::generator() * b;
-// //                 let p2 = p1.clone();
-// //                 let q2 = -q1.clone();
-
-// //                 let eq_class =
-// //                     multi_miller_loop(&[p1, p2], &[G2Prepared::from(q1), G2Prepared::from(q2)]);
-// //                 let rhs = final_exponentiation(&eq_class) == Fp12::<Bls12381Curve>::one();
-// //                 let lhs = verify_pairing(&[p1, p2], &[q1, q2]);
-// //                 assert_eq!(lhs, rhs);
-// //             }
-// //             {
-// //                 let a = Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let b = Fr::<Bls12381Curve>::random(&mut thread_rng());
-
-// //                 let p1 = &G1Affine::<Bls12381Curve>::generator() * a;
-// //                 let q1 = &G2Affine::<Bls12381Curve>::generator() * b;
-// //                 let p2 = -p1.clone();
-// //                 let q2 = q1.clone();
-
-// //                 let eq_class =
-// //                     multi_miller_loop(&[p1, p2], &[G2Prepared::from(q1), G2Prepared::from(q2)]);
-// //                 let rhs = final_exponentiation(&eq_class) == Fp12::<Bls12381Curve>::one();
-// //                 let lhs = verify_pairing(&[p1, p2], &[q1, q2]);
-// //                 assert_eq!(lhs, rhs);
-// //             }
-// //             {
-// //                 let a = Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let b = Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let c = Fr::<Bls12381Curve>::random(&mut thread_rng());
-
-// //                 let p1 = &G1Affine::<Bls12381Curve>::generator() * a;
-// //                 let q1 = &G2Affine::<Bls12381Curve>::generator() * b;
-// //                 let p2 = &G1Affine::<Bls12381Curve>::generator() * c;
-// //                 let q2 = G2Affine::<Bls12381Curve>::identity();
-
-// //                 let eq_class =
-// //                     multi_miller_loop(&[p1, p2], &[G2Prepared::from(q1), G2Prepared::from(q2)]);
-// //                 let rhs = final_exponentiation(&eq_class) == Fp12::<Bls12381Curve>::one();
-// //                 let lhs = verify_pairing(&[p1, p2], &[q1, q2]);
-// //                 assert_eq!(lhs, rhs);
-// //             }
-// //             {
-// //                 let a = Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let b = Fr::<Bls12381Curve>::random(&mut thread_rng());
-// //                 let c = Fr::<Bls12381Curve>::random(&mut thread_rng());
-
-// //                 let p1 = &G1Affine::<Bls12381Curve>::generator() * a;
-// //                 let q1 = &G2Affine::<Bls12381Curve>::generator() * b;
-// //                 let p2 = G1Affine::<Bls12381Curve>::identity();
-// //                 let q2 = &G2Affine::<Bls12381Curve>::generator() * c;
-
-// //                 let eq_class =
-// //                     multi_miller_loop(&[p1, p2], &[G2Prepared::from(q1), G2Prepared::from(q2)]);
-// //                 let rhs = final_exponentiation(&eq_class) == Fp12::<Bls12381Curve>::one();
-// //                 let lhs = verify_pairing(&[p1, p2], &[q1, q2]);
-// //                 assert_eq!(lhs, rhs);
-// //             }
-// //         }
-// //     }
-
-// //     #[test]
-// //     fn test_kzg_proof() {
-// //         // Define p_minus_y as G1Affine
-// //         let p_minus_y: G1Affine<Bls12381Curve> = G1Affine::new(
-// //             Fp::from_raw_unchecked([
-// //                 0xf1fbbbca6f146556,
-// //                 0xd97b05f5c8d900ac,
-// //                 0xc9dd98c56817e878,
-// //                 0x74e56183bb247c8f,
-// //                 0x7834a1246463e647,
-// //                 0x13efc82d2017e9c5,
-// //             ]),
-// //             Fp::from_raw_unchecked([
-// //                 0x5a32ad89774d101a,
-// //                 0x9f98f8b297c0a6ef,
-// //                 0xe6ced5347a619278,
-// //                 0x247e4e72ac6405a7,
-// //                 0x042314d67c5e1501,
-// //                 0x0d227532e5ff0df7,
-// //             ]),
-// //             false,
-// //         );
-
-// //         // Define G2Affine::generator
-// //         let g = G2Affine::generator();
-
-// //         // Define proof as G1Affine
-// //         let proof = G1Affine::new(
-// //             Fp::from_raw_unchecked([
-// //                 0x1fd63e07b7ebc348,
-// //                 0x9877db2329721299,
-// //                 0x086bc4061c7f6324,
-// //                 0x4b7ba36a0f40e2dc,
-// //                 0x71cefecd79e8274b,
-// //                 0x12c51ff81dd71dab,
-// //             ]),
-// //             Fp::from_raw_unchecked([
-// //                 0xf51a4d928d996704,
-// //                 0x38dec50cc439f51e,
-// //                 0x4b97bd173f0b4c01,
-// //                 0x866a52ef6cac68a2,
-// //                 0x4a1f6c1e6aa580c7,
-// //                 0x0bd8e916630efd7e,
-// //             ]),
-// //             false,
-// //         );
-
-// //         // Define x_minus_z as G2Affine
-// //         let x_minus_z = G2Affine::new(
-// //             Fp2::new(
-// //                 Fp::from_raw_unchecked([
-// //                     0xcc42fbeea3ec7808,
-// //                     0x3b8ef75ed5a1a1ca,
-// //                     0x0633aea0b5b120db,
-// //                     0xe8f1cfad5bc15230,
-// //                     0x8fdc563271d71fb5,
-// //                     0x0f58325a9123de31,
-// //                 ]),
-// //                 Fp::from_raw_unchecked([
-// //                     0xe1dae420221cad3c,
-// //                     0xd56cfc3004fc9708,
-// //                     0x0a09e94596bb3128,
-// //                     0x15f9874482328d1a,
-// //                     0xeb06711c136096c8,
-// //                     0x137758dc8afa2624,
-// //                 ]),
-// //             ),
-// //             Fp2::new(
-// //                 Fp::from_raw_unchecked([
-// //                     0xd302bbe8bda77fb6,
-// //                     0xa2b946d42ddc533b,
-// //                     0x098cb463ef721dcd,
-// //                     0x67e19da6e2eb73cd,
-// //                     0xce92e1e270600b1f,
-// //                     0x19e67ae2dd855f14,
-// //                 ]),
-// //                 Fp::from_raw_unchecked([
-// //                     0x54f07cccf704a1ed,
-// //                     0x3a0d28b8fc4bfb08,
-// //                     0x37fbb971fb52744e,
-// //                     0x0e96d351a42e2641,
-// //                     0x46fc269fcd20eb3e,
-// //                     0x048d9a7062ad9106,
-// //                 ]),
-// //             ),
-// //             false,
-// //         );
-
-// //         // Print residue output
-// //         println!(
-// //             "residue output: {:?}",
-// //             verify_pairing(&[p_minus_y, proof], &[g, x_minus_z])
-// //         );
-
-// //         // Compute equivalence class using multi_miller_loop
-// //         let eq_class = multi_miller_loop(
-// //             &[p_minus_y, proof],
-// //             &[G2Prepared::from(g), G2Prepared::from(x_minus_z)],
-// //         );
-
-// //         // Final exponentiation and comparison
-// //         let rhs = final_exponentiation(&eq_class);
-// //         println!("final exponentiation output: {:?}", rhs);
-// //         println!(
-// //             "final exponentiation output: {:?}",
-// //             rhs == Fp12::<Bls12381Curve>::one()
-// //         );
-// //     }
-// // }

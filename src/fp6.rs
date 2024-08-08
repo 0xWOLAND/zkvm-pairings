@@ -7,15 +7,15 @@ use core::ops::{Add, Div, Mul, Neg, Sub};
 use rand::RngCore;
 
 pub trait Fp6Element: Fp2Element {
-    type Fp6ElementType;
-    fn from_bytes_slice(bytes: &[u8]) -> Self::Fp6ElementType;
-    fn to_bytes_vec(f: &Self::Fp6ElementType) -> Vec<u8>;
+    fn from_bytes_slice(bytes: &[u8]) -> Fp6<Self>;
+    fn to_bytes_vec(f: &Fp6<Self>) -> Vec<u8>;
     fn get_fp6_frobenius_coeff(i: usize) -> (Self, Self);
+    fn _invert(f: &Fp6<Self>) -> Option<Fp6<Self>>;
+    fn invert(f: &Fp6<Self>) -> Option<Fp6<Self>>;
 }
 
 impl Fp6Element for Bls12381 {
-    type Fp6ElementType = Fp6<Bls12381>;
-    fn from_bytes_slice(bytes: &[u8]) -> Self::Fp6ElementType {
+    fn from_bytes_slice(bytes: &[u8]) -> Fp6<Bls12381> {
         let mut c0_bytes = [0u8; 96];
         let mut c1_bytes = [0u8; 96];
         let mut c2_bytes = [0u8; 96];
@@ -31,7 +31,7 @@ impl Fp6Element for Bls12381 {
         Fp6::<Bls12381>::new(c0, c1, c2)
     }
 
-    fn to_bytes_vec(f: &Self::Fp6ElementType) -> Vec<u8> {
+    fn to_bytes_vec(f: &Fp6<Bls12381>) -> Vec<u8> {
         let mut res = [0u8; 288];
         let c0_bytes = <Bls12381 as Fp2Element>::to_bytes_vec(&f.c0);
         let c1_bytes = <Bls12381 as Fp2Element>::to_bytes_vec(&f.c1);
@@ -69,13 +69,98 @@ impl Fp6Element for Bls12381 {
                 ]),
                 Self::zero(),
             ),
+            3 => (
+                Self::zero(),
+                Self::from_raw_unchecked([
+                    0xb9feffffffffaaaa,
+                    0x1eabfffeb153ffff,
+                    0x6730d2a0f6b0f624,
+                    0x64774b84f38512bf,
+                    0x4b1ba7b6434bacd7,
+                    0x1a0111ea397fe69a,
+                ]),
+            ),
+            4 => (
+                Self::from_raw_unchecked([
+                    0x8bfd00000000aaac,
+                    0x409427eb4f49fffd,
+                    0x897d29650fb85f9b,
+                    0xaa0d857d89759ad4,
+                    0xec02408663d4de85,
+                    0x1a0111ea397fe699,
+                ]),
+                Self::zero(),
+            ),
+            5 => (
+                Self::zero(),
+                Self::from_raw_unchecked([
+                    0x2e01fffffffefffe,
+                    0xde17d813620a0002,
+                    0xddb3a93be6f89688,
+                    0xba69c6076a0f77ea,
+                    0x5f19672fdf76ce51,
+                    0x0000000000000000,
+                ]),
+            ),
             _ => panic!("Invalid power"),
         }
+    }
+
+    fn _invert(f: &Fp6<Bls12381>) -> Option<Fp6<Bls12381>> {
+        let c0 = (f.c1 * f.c2).mul_by_nonresidue();
+        let c0 = f.c0.square() - c0;
+
+        let c1 = f.c2.square().mul_by_nonresidue();
+        let c1 = c1 - (f.c0 * f.c1);
+
+        let c2 = f.c1.square();
+        let c2 = c2 - (f.c0 * f.c2);
+
+        let tmp = ((f.c1 * c2) + (f.c2 * c1)).mul_by_nonresidue();
+        let tmp = tmp + (f.c0 * c0);
+
+        <Bls12381 as Fp2Element>::_invert(&tmp).map(|t| Fp6 {
+            c0: t * c0,
+            c1: t * c1,
+            c2: t * c2,
+        })
+    }
+
+    #[cfg(not(target_os = "zkvm"))]
+    fn invert(f: &Fp6<Self>) -> Option<Fp6<Self>> {
+        Fp6Element::_invert(&f)
+    }
+
+    #[cfg(target_os = "zkvm")]
+    fn invert(f: &Fp6<Bls12381>) -> Option<Fp6<Bls12381>> {
+        use sp1_zkvm::{
+            io::FD_HINT,
+            lib::{io, unconstrained},
+        };
+
+        unconstrained! {
+            let mut buf = [0u8; 289];
+            match Fp6Element::_invert(&f) {
+                Some(x) => {
+                    buf[288] = 1;
+                    buf[0..288].copy_from_slice(&<Bls12381 as Fp6Element>::to_bytes_vec(&x));
+                }
+                None => {}
+            }
+
+            io::write(FD_HINT, &buf);
+        }
+
+        let bytes: [u8; 289] = io::read_vec().try_into().unwrap();
+        let is_some = bytes[288] == 1;
+        let bytes = bytes[..288].try_into().unwrap();
+        let out = <Bls12381 as Fp6Element>::from_bytes_slice(bytes);
+
+        Some(out).filter(|_| is_some)
     }
 }
 
 impl Fp6Element for Bn254 {
-    type Fp6ElementType = Fp6<Bn254>;
     fn get_fp6_frobenius_coeff(pow: usize) -> (Self, Self) {
         match pow % 6 {
             0 => (Self::one(), Self::one()),
@@ -106,7 +191,7 @@ impl Fp6Element for Bn254 {
         }
     }
 
-    fn from_bytes_slice(bytes: &[u8]) -> Self::Fp6ElementType {
+    fn from_bytes_slice(bytes: &[u8]) -> Fp6<Bn254> {
         let mut c0_bytes = [0u8; 96];
         let mut c1_bytes = [0u8; 96];
         let mut c2_bytes = [0u8; 96];
@@ -122,7 +207,7 @@ impl Fp6Element for Bn254 {
         Fp6::<Bn254>::new(c0, c1, c2)
     }
 
-    fn to_bytes_vec(f: &Self::Fp6ElementType) -> Vec<u8> {
+    fn to_bytes_vec(f: &Fp6<Self>) -> Vec<u8> {
         let mut res = [0u8; 288];
         let c0_bytes = <Bn254 as Fp2Element>::to_bytes_vec(&f.c0);
         let c1_bytes = <Bn254 as Fp2Element>::to_bytes_vec(&f.c1);
@@ -133,6 +218,59 @@ impl Fp6Element for Bn254 {
         res[192..288].copy_from_slice(&c2_bytes);
 
         res.to_vec()
+    }
+
+    fn _invert(f: &Fp6<Bn254>) -> Option<Fp6<Bn254>> {
+        let c0 = (f.c1 * f.c2).mul_by_nonresidue();
+        let c0 = f.c0.square() - c0;
+
+        let c1 = f.c2.square().mul_by_nonresidue();
+        let c1 = c1 - (f.c0 * f.c1);
+
+        let c2 = f.c1.square();
+        let c2 = c2 - (f.c0 * f.c2);
+
+        let tmp = ((f.c1 * c2) + (f.c2 * c1)).mul_by_nonresidue();
+        let tmp = tmp + (f.c0 * c0);
+
+        <Bn254 as Fp2Element>::_invert(&tmp).map(|t| Fp6 {
+            c0: t * c0,
+            c1: t * c1,
+            c2: t * c2,
+        })
+    }
+
+    #[cfg(not(target_os = "zkvm"))]
+    fn invert(f: &Fp6<Self>) -> Option<Fp6<Self>> {
+        Fp6Element::_invert(&f)
+    }
+
+    #[cfg(target_os = "zkvm")]
+    fn invert(f: &Fp6<Self>) -> Option<Fp6<Self>> {
+        use sp1_zkvm::{
+            io::FD_HINT,
+            lib::{io, unconstrained},
+        };
+
+        unconstrained! {
+            let mut buf = [0u8; 257];
+            match Fp6Element::_invert(&f) {
+                Some(x) => {
+                    buf[256] = 1;
+                    buf[0..256].copy_from_slice(&<Self as Fp6Element>::to_bytes_vec(&x));
+                }
+                None => {}
+            }
+
+            io::write(FD_HINT, &buf);
+        }
+
+        let bytes: [u8; 257] = io::read_vec().try_into().unwrap();
+        let is_some = bytes[256] == 1;
+        let bytes = bytes[..256].try_into().unwrap();
+        let out = <Self as Fp6Element>::from_bytes_slice(bytes);
+
+        Some(out).filter(|_| is_some)
     }
 }
 /// This represents an element $c_0 + c_1 v + c_2 v^2$ of $\mathbb{F}_{p^6} = \mathbb{F}_{p^2} / v^3 - u - 1$.
@@ -280,32 +418,33 @@ impl<F: Fp6Element> Fp6<F> {
         let c1 = self.c1.frobenius_map();
         let c2 = self.c2.frobenius_map();
 
-        // c1 = c1 * (u + 1)^((p - 1) / 3)
         let c1_coeffs = F::get_fp6_frobenius_coeff(1);
-        let c1 = c1 * Fp2::new(c1_coeffs.0, c1_coeffs.1);
+        let rhs = Fp2::new(c1_coeffs.0, c1_coeffs.1);
+        let c1 = c1 * rhs;
 
         // c2 = c2 * (u + 1)^((2p - 2) / 3)
         let c2_coeffs = F::get_fp6_frobenius_coeff(2);
-        let c2 = c2 * Fp2::new(c2_coeffs.0, c2_coeffs.1);
+        let rhs = Fp2::new(c2_coeffs.0, c2_coeffs.1);
+        let c2 = c2 * rhs;
 
         Fp6 { c0, c1, c2 }
     }
 
-    pub(crate) fn nth_frobenius_map(&self, pow: usize) -> Self {
-        let c0 = self.c0.frobenius_map();
-        let c1 = self.c1.frobenius_map();
-        let c2 = self.c2.frobenius_map();
+    // pub(crate) fn nth_frobenius_map(&self, pow: usize) -> Self {
+    //     let c0 = self.c0.frobenius_map();
+    //     let c1 = self.c1.frobenius_map();
+    //     let c2 = self.c2.frobenius_map();
 
-        // c1 = c1 * (u + 1)^((p - 1) / 3)
-        let c1_coeffs = F::get_fp6_frobenius_coeff(pow);
-        let c1 = c1 * Fp2::new(c1_coeffs.0, c1_coeffs.1);
+    //     // c1 = c1 * (u + 1)^((p - 1) / 3)
+    //     let c1_coeffs = F::get_fp6_frobenius_coeff(pow);
+    //     let c1 = c1 * Fp2::new(c1_coeffs.0, c1_coeffs.1);
 
-        // c2 = c2 * (u + 1)^((2p - 2) / 3)
-        let c2_coeffs = F::get_fp6_frobenius_coeff(pow + 1);
-        let c2 = c2 * Fp2::new(c2_coeffs.0, c2_coeffs.1);
+    //     // c2 = c2 * (u + 1)^((2p - 2) / 3)
+    //     let c2_coeffs = F::get_fp6_frobenius_coeff(pow + 1);
+    //     let c2 = c2 * Fp2::new(c2_coeffs.0, c2_coeffs.1);
 
-        Fp6 { c0, c1, c2 }
-    }
+    //     Fp6 { c0, c1, c2 }
+    // }
 
     #[inline(always)]
     pub fn is_zero(&self) -> bool {
@@ -364,23 +503,7 @@ impl<F: Fp6Element> Fp6<F> {
 
     #[inline]
     pub fn invert(&self) -> Option<Self> {
-        let c0 = (self.c1 * self.c2).mul_by_nonresidue();
-        let c0 = self.c0.square() - c0;
-
-        let c1 = self.c2.square().mul_by_nonresidue();
-        let c1 = c1 - (self.c0 * self.c1);
-
-        let c2 = self.c1.square();
-        let c2 = c2 - (self.c0 * self.c2);
-
-        let tmp = ((self.c1 * c2) + (self.c2 * c1)).mul_by_nonresidue();
-        let tmp = tmp + (self.c0 * c0);
-
-        tmp.invert().map(|t| Fp6 {
-            c0: t * c0,
-            c1: t * c1,
-            c2: t * c2,
-        })
+        Fp6Element::invert(&self)
     }
 }
 

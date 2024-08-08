@@ -127,13 +127,13 @@ impl G2Element for Bls12381 {
             // Mask away the flag bits
             tmp[0] &= 0b0001_1111;
 
-            Some(Bls12381::from_bytes(&tmp))
+            Some(Bls12381::from_bytes_unsafe(&tmp))
         };
         let xc0 = {
             let mut tmp = [0; 48];
             tmp.copy_from_slice(&bytes[48..96]);
 
-            Some(Bls12381::from_bytes(&tmp))
+            Some(Bls12381::from_bytes_unsafe(&tmp))
         };
 
         xc1.and_then(|xc1| {
@@ -344,6 +344,7 @@ impl<F: G2Element> G2Affine<F> {
 
         // Check if y is zero
         if y.is_zero() {
+            println!("y is zero");
             return Self::identity();
         }
 
@@ -353,6 +354,7 @@ impl<F: G2Element> G2Affine<F> {
         let slope = (x.square() * three) / (y * two);
         let x_new = slope.square() - x * two;
         let y_new = slope * (x - x_new) - y;
+
         Self {
             x: x_new,
             y: y_new,
@@ -498,4 +500,11 @@ impl<F: G2Element> G2Projective<F> {
     pub fn is_identity(&self) -> bool {
         self.z.is_zero()
     }
+}
+
+#[test]
+fn test_g2_gen_double() {
+    let g2 = G2Affine::<Bls12381>::generator();
+    let g2_double = g2.double();
+    println!("g2_double: {:?}", g2_double);
 }

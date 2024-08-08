@@ -24,9 +24,8 @@ pub trait Fp2Element: FpElement {
         // of (a + bu). Importantly, this can be computing using
         // only a single inversion in F.
 
-        (f.c0.square() + f.c1.square())
-            .invert()
-            .map(|t| Fp2::new(f.c0 * t, f.c1 * -t))
+        let t = (f.c0.square() + f.c1.square())._invert();
+        Some(Fp2::new(f.c0 * t, f.c1 * -t))
     }
     fn invert(f: &Fp2<Self>) -> Option<Fp2<Self>>;
     fn _sqrt(f: &Fp2<Self>) -> Option<Fp2<Self>>;
@@ -38,22 +37,19 @@ pub trait Fp2Element: FpElement {
 
 impl Fp2Element for Bls12381 {
     fn from_bytes_slice(bytes: &[u8]) -> Fp2<Bls12381> {
-        // Split the bytes array into two 48-byte slices
         let c0_bytes: [u8; 48] = bytes[..48].try_into().expect("slice with incorrect length");
         let c1_bytes: [u8; 48] = bytes[48..].try_into().expect("slice with incorrect length");
 
-        // Call Bls12381::from_bytes directly
-        let c0 = Bls12381::from_bytes(&c0_bytes);
-        let c1 = Bls12381::from_bytes(&c1_bytes);
+        let c0 = Bls12381::from_bytes_unsafe(&c0_bytes);
+        let c1 = Bls12381::from_bytes_unsafe(&c1_bytes);
 
-        // Create the Fp2 element
         Fp2::new(c0, c1)
     }
 
     fn to_bytes_vec(f: &Fp2<Bls12381>) -> Vec<u8> {
         let mut bytes = [0u8; 96];
-        bytes[..48].copy_from_slice(&Self::to_bytes(&f.c0));
-        bytes[48..].copy_from_slice(&Self::to_bytes(&f.c1));
+        bytes[..48].copy_from_slice(&Self::to_bytes_unsafe(&f.c0));
+        bytes[48..].copy_from_slice(&Self::to_bytes_unsafe(&f.c1));
         bytes.to_vec()
     }
 
@@ -74,7 +70,7 @@ impl Fp2Element for Bls12381 {
             match Fp2Element::_invert(&f) {
                 Some(x) => {
                     buf[96] = 1;
-                    buf[0..96].copy_from_slice(&Fp2Element::to_bytes_vec(&x));
+                    buf[0..96].copy_from_slice(&<Bls12381 as Fp2Element>::to_bytes_vec(&x));
                 }
                 None => {}
             }
@@ -85,7 +81,7 @@ impl Fp2Element for Bls12381 {
         let bytes: [u8; 97] = io::read_vec().try_into().unwrap();
         let is_some = bytes[96] == 1;
         let bytes = bytes[..96].try_into().unwrap();
-        let out = Bls12381::from_bytes_slice(bytes);
+        let out = <Bls12381 as Fp2Element>::from_bytes_slice(bytes);
 
         Some(out).filter(|_| is_some)
     }
@@ -147,7 +143,7 @@ impl Fp2Element for Bls12381 {
             match Fp2Element::_sqrt(&f) {
                 Some(x) => {
                     buf[96] = 1;
-                    buf[0..96].copy_from_slice(&Bls12381::to_bytes_vec(&x));
+                    buf[0..96].copy_from_slice(&<Bls12381 as Fp2Element>::to_bytes_vec(&x));
                 }
                 None => {}
             }
@@ -157,7 +153,7 @@ impl Fp2Element for Bls12381 {
 
         let byte_vec: [u8; 96] = io::read_vec().try_into().unwrap();
         let is_some = io::read_vec()[0] == 1;
-        let out = Bls12381::from_bytes_slice(&byte_vec);
+        let out = <Bls12381 as Fp2Element>::from_bytes_slice(&byte_vec);
 
         Some(out).filter(|_| is_some && out.square() == *f)
     }
@@ -234,9 +230,9 @@ impl Fp2Element for Bn254 {
         let c0_bytes: [u8; 32] = bytes[..32].try_into().expect("slice with incorrect length");
         let c1_bytes: [u8; 32] = bytes[32..].try_into().expect("slice with incorrect length");
 
-        // Call Bn254::from_bytes directly
-        let c0 = Bn254::from_bytes(&c0_bytes);
-        let c1 = Bn254::from_bytes(&c1_bytes);
+        // Call Bn254::from_bytes_unsafe directly
+        let c0 = Bn254::from_bytes_unsafe(&c0_bytes);
+        let c1 = Bn254::from_bytes_unsafe(&c1_bytes);
 
         // Create the Fp2 element
         Fp2::new(c0, c1)
@@ -244,8 +240,8 @@ impl Fp2Element for Bn254 {
 
     fn to_bytes_vec(f: &Fp2<Bn254>) -> Vec<u8> {
         let mut bytes = [0u8; 64];
-        bytes[..32].copy_from_slice(&Self::to_bytes(&f.c0));
-        bytes[32..].copy_from_slice(&Self::to_bytes(&f.c1));
+        bytes[..32].copy_from_slice(&Self::to_bytes_unsafe(&f.c0));
+        bytes[32..].copy_from_slice(&Self::to_bytes_unsafe(&f.c1));
         bytes.to_vec()
     }
 
@@ -266,7 +262,7 @@ impl Fp2Element for Bn254 {
             match Fp2Element::_invert(f) {
                 Some(x) => {
                     buf[64] = 1;
-                    buf[0..64].copy_from_slice(&Fp2Element::to_bytes_vec(&x));
+                    buf[0..64].copy_from_slice(&<Bn254 as Fp2Element>::to_bytes_vec(&x));
                 }
                 None => {}
             }
@@ -277,7 +273,7 @@ impl Fp2Element for Bn254 {
         let bytes: [u8; 65] = io::read_vec().try_into().unwrap();
         let is_some = bytes[64] == 1;
         let bytes: [u8; 64] = bytes[..64].try_into().unwrap();
-        let out = Fp2Element::from_bytes_slice(&bytes);
+        let out = <Bn254 as Fp2Element>::from_bytes_slice(&bytes);
 
         Some(out).filter(|_| is_some)
     }
@@ -336,7 +332,7 @@ impl Fp2Element for Bn254 {
             match Fp2Element::_sqrt(&f) {
                 Some(x) => {
                     buf[64] = 1;
-                    buf[0..64].copy_from_slice(&Fp2Element::to_bytes_vec(&x));
+                    buf[0..64].copy_from_slice(&<Bn254 as Fp2Element>::to_bytes_vec(&x));
                 }
                 None => {}
             }
@@ -347,7 +343,7 @@ impl Fp2Element for Bn254 {
         let bytes: [u8; 65] = io::read_vec().try_into().unwrap();
         let is_some = bytes[64] == 1;
         let bytes = bytes[..64].try_into().unwrap();
-        let out = Bn254::from_bytes_slice(bytes);
+        let out = <Bn254 as Fp2Element>::from_bytes_slice(bytes);
 
         Some(out).filter(|_| is_some)
     }
@@ -821,7 +817,7 @@ mod test {
                             let mut a_bytes = a.to_bytes_le();
                             a_bytes.resize(48, 0);
 
-                            let a_fp = $curve::from_bytes(&a_bytes.try_into().unwrap());
+                            let a_fp = $curve::from_bytes_unsafe(&a_bytes.try_into().unwrap());
                             (a, a_inv, a_fp)
                         };
 
