@@ -671,7 +671,7 @@ impl<F: Fp2Element> Fp2<F> {
     }
 
     #[inline]
-    pub fn lexicographically_largest(&self) -> bool {
+    pub fn is_lexicographically_largest(&self) -> bool {
         self.c1.is_lexicographically_largest()
             || (self.c1 == F::zero() && self.c0.is_lexicographically_largest())
     }
@@ -898,7 +898,7 @@ mod bls12_381_tests {
             let (a, a_inv, a_fp) = gen_test_value();
             let (b, b_inv, b_fp) = gen_test_value();
 
-            let lhs = Fp2::new(a_fp, b_fp).lexicographically_largest();
+            let lhs = Fp2::new(a_fp, b_fp).is_lexicographically_largest();
             let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
 
             assert_eq!(lhs, rhs);
@@ -910,7 +910,7 @@ mod bls12_381_tests {
             let b_inv = BigUint::ZERO;
             let b_fp = Bls12381::zero();
 
-            let lhs = Fp2::new(a_fp, b_fp).lexicographically_largest();
+            let lhs = Fp2::new(a_fp, b_fp).is_lexicographically_largest();
             let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
 
             assert_eq!(lhs, rhs);

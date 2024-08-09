@@ -15,6 +15,7 @@ pub trait G2Element: Fp2Element + AffinePoint {
 
     fn is_valid(p: &G2Affine<Self>) -> Result<(), String>;
     fn from_compressed_unchecked(bytes: &[u8]) -> Option<G2Affine<Self>>;
+    fn to_compressed(p: &G2Affine<Self>, bytes: &mut [u8]);
     fn generator() -> G2Affine<Self>;
 }
 
@@ -119,6 +120,10 @@ impl G2Element for Bls12381 {
         let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
         let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
 
+        println!("compression_flag_set: {:?}", compression_flag_set);
+        println!("infinity_flag_set: {:?}", infinity_flag_set);
+        println!("sort_flag_set: {:?}", sort_flag_set);
+
         // Attempt to obtain the x-coordinate
         let xc1 = {
             let mut tmp = [0; 48];
@@ -145,11 +150,12 @@ impl G2Element for Bls12381 {
                     Some(G2Affine::identity())
                 } else if !infinity_flag_set && compression_flag_set {
                     // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
-                    let y_result = ((x.square() * x) + Self::B).sqrt();
+                    let y_result = ((x.square() * x) + Self::B);
+                    let y_result = y_result.sqrt();
 
                     y_result.map(|y| {
                         // Switch to the correct y-coordinate if necessary
-                        let y = if y.lexicographically_largest() ^ sort_flag_set {
+                        let y = if y.is_lexicographically_largest() ^ sort_flag_set {
                             -y
                         } else {
                             y
@@ -166,6 +172,27 @@ impl G2Element for Bls12381 {
                 }
             })
         })
+    }
+
+    fn to_compressed(p: &G2Affine<Self>, bytes: &mut [u8]) {
+        // let x = if p.is_infinity { Fp2::zero() } else { p.x };
+
+        // bytes[0..48].copy_from_slice(&x.c1.to_bytes()[..]);
+        // bytes[48..96].copy_from_slice(&x.c0.to_bytes()[..]);
+
+        // bytes[0] |= 1u8 << 7;
+
+        // bytes[0] = if p.is_infinity {
+        //     bytes[0] | 1u8 << 6
+        // } else {
+        //     bytes[0]
+        // };
+        // bytes[0] = if !p.is_infinity && p.y.is_lexicographically_largest() {
+        //     bytes[0] | 1u8 << 5
+        // } else {
+        //     bytes[0]
+        // };
+        unimplemented!()
     }
 }
 
@@ -267,7 +294,7 @@ impl G2Element for Bn254 {
         let sign = bytes[0];
         let x = <Self as Fp2Element>::from_bytes_be(bytes[1..].try_into().unwrap()).unwrap();
         let y = (x.square() * x + <Bn254 as G2Element>::B).sqrt().unwrap();
-        let y_is_lex_smallest = y.lexicographically_largest();
+        let y_is_lex_smallest = y.is_lexicographically_largest();
 
         let e_y = match sign {
             10 => match y_is_lex_smallest {
@@ -284,6 +311,10 @@ impl G2Element for Bn254 {
 
         G2Affine::new(x, e_y, false)
         // Some(G2Affine::from_raw_unchecked(x, e_y, false))
+    }
+
+    fn to_compressed(p: &G2Affine<Self>, bytes: &mut [u8]) {
+        unimplemented!()
     }
 }
 
@@ -396,6 +427,14 @@ impl<F: G2Element> G2Affine<F> {
             y: y_new,
             is_infinity: false,
         }
+    }
+
+    pub fn from_compressed(bytes: &[u8]) -> Option<Self> {
+        F::from_compressed_unchecked(bytes)
+    }
+
+    pub fn to_compressed(&self, bytes: &mut [u8]) {
+        F::to_compressed(self, bytes)
     }
 }
 
@@ -536,6 +575,28 @@ impl<F: G2Element> G2Projective<F> {
     pub fn is_identity(&self) -> bool {
         self.z.is_zero()
     }
+}
+
+#[cfg(test)]
+mod algebraic_tests {
+
+    use super::*;
+
+    fn bls12381_rand_g2() -> G2Affine<Bls12381> {
+        let mut rng = rand::thread_rng();
+        G2Affine::<Bls12381>::random(&mut rng)
+    }
+
+    // #[test]
+    // fn test_from_to_compressed() {
+    //     for _ in 0..10 {
+    //         let p = bls12381_rand_g2();
+    //         let mut compressed = [0u8; 96];
+    //         G2Affine::<Bls12381>::to_compressed(&p, &mut compressed);
+    //         let q = G2Affine::<Bls12381>::from_compressed(&compressed).unwrap();
+    //         assert_eq!(p, q);
+    //     }
+    // }
 }
 
 #[cfg(test)]
