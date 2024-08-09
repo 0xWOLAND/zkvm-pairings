@@ -10,7 +10,7 @@ use num_bigint::BigUint;
 use rand::RngCore;
 
 #[cfg(target_os = "zkvm")]
-use sp1_lib::io::{self, unconstrained};
+use sp1_lib::{io, unconstrained};
 
 pub trait Fp12Element: Fp6Element {
     type Fp12ElementType;
