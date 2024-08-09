@@ -321,16 +321,24 @@ impl<F: G2Element> G2Affine<F> {
         }
     }
 
-    pub(crate) fn is_identity(&self) -> bool {
+    pub fn is_identity(&self) -> bool {
         self.is_infinity
     }
 
-    fn is_zero(&self) -> bool {
+    pub fn is_zero(&self) -> bool {
         self.x.is_zero() && self.y.is_zero()
     }
 
     pub fn generator() -> Self {
         F::generator()
+    }
+
+    pub fn is_on_curve(&self) -> bool {
+        if self.is_infinity {
+            return true;
+        }
+
+        F::is_on_curve(&self.x, &self.y)
     }
 
     pub fn is_valid(&self) -> Result<(), String> {

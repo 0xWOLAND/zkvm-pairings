@@ -1,8 +1,6 @@
 use std::fmt;
 use std::ops::{Add, Mul, Neg, Sub};
 
-use substrate_bn::G1;
-
 use crate::common::AffinePoint;
 use crate::fp::{Bls12381, Bn254, FpElement};
 use crate::fr::{Fr, FrElement};
@@ -14,6 +12,7 @@ pub trait G1Element: FpElement + AffinePoint {
     }
     fn is_valid(p: &G1Affine<Self>) -> Result<(), String>;
     fn from_compressed_unchecked(bytes: &[u8]) -> Option<G1Affine<Self>>;
+    fn to_compressed(p: &G1Affine<Self>, bytes: &mut [u8]);
     fn generator() -> G1Affine<Self>;
 }
 
@@ -108,6 +107,26 @@ impl G1Element for Bls12381 {
 
         G1Affine::from_raw_unchecked(G1_X, G1_Y, false)
     }
+
+    fn to_compressed(p: &G1Affine<Self>, bytes: &mut [u8]) {
+        bytes.copy_from_slice(
+            if p.is_infinity { Bls12381::zero() } else { p.x }
+                .to_bytes()
+                .as_mut_slice(),
+        );
+        bytes[0] |= 1u8 << 7;
+
+        bytes[0] = if p.is_infinity {
+            bytes[0] | 1u8 << 6
+        } else {
+            bytes[0]
+        };
+        bytes[0] = if !p.is_infinity && p.y.is_lexicographically_largest() {
+            bytes[0] | 1u8 << 5
+        } else {
+            bytes[0]
+        };
+    }
 }
 
 impl G1Element for Bn254 {
@@ -139,45 +158,10 @@ impl G1Element for Bn254 {
         }
 
         G1Affine::new(x, y)
+    }
 
-        // // Obtain the three flags from the start of the byte sequence
-        // let compression_flag_set = (bytes[0] >> 7) & 1 == 1;
-        // let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
-        // let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
-
-        // // Attempt to obtain the x-coordinate
-        // let x = {
-        //     let mut tmp = [0; 32];
-        //     tmp.copy_from_slice(&bytes[0..32]);
-
-        //     // Mask away the flag bits
-        //     tmp[0] &= 0b0001_1111;
-
-        //     Bn254::from_bytes_unsafe(&tmp)
-        // };
-
-        // if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
-        //     // Infinity flag is set and x-coordinate is zero
-        //     Some(G1Affine::identity())
-        // } else if !infinity_flag_set && compression_flag_set {
-        //     // Recover a y-coordinate given x by y = sqrt(x^3 + B)
-        //     let y_result = ((x.square() * x) + Bn254::from(Bn254::B)).sqrt();
-
-        //     y_result.map(|y| {
-        //         let y = match !(y.is_lexicographically_largest() ^ sort_flag_set) {
-        //             true => y,
-        //             false => -y,
-        //         };
-
-        //         G1Affine {
-        //             x,
-        //             y,
-        //             is_infinity: infinity_flag_set,
-        //         }
-        //     })
-        // } else {
-        //     None
-        // }
+    fn to_compressed(p: &G1Affine<Self>, bytes: &mut [u8]) {
+        unimplemented!()
     }
 
     fn generator() -> G1Affine<Self> {
@@ -232,11 +216,11 @@ impl<F: G1Element> G1Affine<F> {
         }
     }
 
-    pub(crate) fn is_identity(&self) -> bool {
+    pub fn is_identity(&self) -> bool {
         self.is_infinity
     }
 
-    fn is_zero(&self) -> bool {
+    pub fn is_zero(&self) -> bool {
         self.x.is_zero() && self.y.is_zero()
     }
 
@@ -287,7 +271,14 @@ impl<F: G1Element> G1Affine<F> {
         }
     }
 
-    fn is_valid(&self) -> Result<(), String> {
+    pub fn is_on_curve(&self) -> bool {
+        if self.is_identity() {
+            return true;
+        }
+        F::is_on_curve(&self.x, &self.y)
+    }
+
+    pub fn is_valid(&self) -> Result<(), String> {
         if self.is_identity() {
             return Ok(());
         }
@@ -307,6 +298,14 @@ impl<F: G1Element> G1Affine<F> {
             x >>= 1;
         }
         xself
+    }
+
+    pub fn from_compressed(bytes: &[u8]) -> Option<Self> {
+        F::from_compressed_unchecked(bytes)
+    }
+
+    pub fn to_compressed(&self, bytes: &mut [u8]) {
+        F::to_compressed(self, bytes)
     }
 }
 
@@ -573,6 +572,18 @@ mod bls12381_g1_affine_test {
             assert_eq!(lhs, rhs);
         }
     }
+
+    #[test]
+    fn test_from_to_compressed() {
+        for _ in 0..10 {
+            let a = G1Affine::<Bls12381>::random(&mut rand::thread_rng());
+            let mut compressed = [0u8; 48];
+            G1Affine::<Bls12381>::to_compressed(&a, &mut compressed);
+            let b = G1Affine::<Bls12381>::from_compressed(&compressed).unwrap();
+
+            assert_eq!(a, b);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -734,57 +745,6 @@ mod bn254_g1_affine_test {
             assert_eq!(lhs, rhs);
         }
     }
-
-    // #[test]
-    // fn test_print() {
-    //     let x = G1Affine::<Bls12381>::generator();
-    //     println!("{:?}", x);
-    // }
-}
-
-#[test]
-fn test_subtraction() {
-    let a = G1Affine::from_raw_unchecked(
-        Bls12381::from_raw_unchecked([
-            0x46674d90eacb7205,
-            0x0c45a950ebc80888,
-            0x2501289130db2197,
-            0x2aa658c30a2d9043,
-            0x427c1c8fbb758fe2,
-            0x4e0fbf29558c9ac3,
-        ]),
-        Bls12381::from_raw_unchecked([
-            0x4c52672dc1d9c955,
-            0x2828434a1c865ae6,
-            0xc4ba18aead4e0a79,
-            0x99f293a2b82be775,
-            0xd32883e86504d0f7,
-            0x0da14107c936b771,
-        ]),
-        false,
-    );
-
-    let b = G1Affine::from_raw_unchecked(
-        Bls12381::from_raw_unchecked([
-            0xc39a8c5529bf0f4e,
-            0xe28f75bb8f1c7c42,
-            0x43902d0ac358a62a,
-            0x9721db3091280125,
-            0x8808c8eb50a9450c,
-            0x0572cbea904d6746,
-        ]),
-        Bls12381::from_raw_unchecked([
-            0xba86881979749d28,
-            0x4c56d9d4cd16bd1b,
-            0xf73bb9021d5fd76a,
-            0x22ba3ecb8670e461,
-            0x22fda673779d8e38,
-            0x166a9d8cabc673a3,
-        ]),
-        false,
-    );
-
-    println!("{:?}", a - b);
 }
 
 #[cfg(test)]
