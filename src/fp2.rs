@@ -1,17 +1,23 @@
 use crate::fp::{Bls12381, Bn254, FpElement};
-use core::fmt;
 use core::ops::{Add, Div, Mul, Neg, Sub};
 use num_bigint::BigUint;
 use rand_core::RngCore;
-use std::mem::transmute;
 use std::str::FromStr;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
-        use sp1_zkvm::syscalls::{syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_submod, syscall_bls12381_fp2_mulmod, syscall_bn254_fp2_addmod, syscall_bn254_fp2_submod, syscall_bn254_fp2_mulmod};
+        use sp1_lib::{
+            io::{self, FD_HINT},
+            unconstrained,
+        };
+        use sp1_zkvm::syscalls::{
+            syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_mulmod, syscall_bls12381_fp2_submod,
+            syscall_bn254_fp2_addmod, syscall_bn254_fp2_mulmod, syscall_bn254_fp2_submod,
+        };
         use std::mem::transmute;
     }
 }
+
 pub trait Fp2Element: FpElement {
     fn from_bytes_be(bytes: &[u8]) -> Option<Fp2<Self>>;
     fn from_bytes_unsafe(bytes: &[u8]) -> Fp2<Self>;
@@ -84,11 +90,6 @@ impl Fp2Element for Bls12381 {
 
     #[cfg(target_os = "zkvm")]
     fn invert(f: &Fp2<Bls12381>) -> Option<Fp2<Bls12381>> {
-        use sp1_zkvm::{
-            io::FD_HINT,
-            lib::{io, unconstrained},
-        };
-
         unconstrained! {
             let mut buf = [0u8; 97];
             match Fp2Element::_invert(&f) {
@@ -105,7 +106,7 @@ impl Fp2Element for Bls12381 {
         let bytes: [u8; 97] = io::read_vec().try_into().unwrap();
         let is_some = bytes[96] == 1;
         let bytes = bytes[..96].try_into().unwrap();
-        let out = <Bls12381 as Fp2Element>::from_bytes_slice(bytes);
+        let out = <Bls12381 as Fp2Element>::from_bytes_be(bytes).unwrap();
 
         Some(out).filter(|_| is_some)
     }
@@ -177,7 +178,7 @@ impl Fp2Element for Bls12381 {
 
         let byte_vec: [u8; 96] = io::read_vec().try_into().unwrap();
         let is_some = io::read_vec()[0] == 1;
-        let out = <Bls12381 as Fp2Element>::from_bytes_slice(&byte_vec);
+        let out = <Bls12381 as Fp2Element>::from_bytes_be(&byte_vec).unwrap();
 
         Some(out).filter(|_| is_some && out.square() == *f)
     }
@@ -335,7 +336,7 @@ impl Fp2Element for Bn254 {
         let bytes: [u8; 65] = io::read_vec().try_into().unwrap();
         let is_some = bytes[64] == 1;
         let bytes: [u8; 64] = bytes[..64].try_into().unwrap();
-        let out = <Bn254 as Fp2Element>::from_bytes_slice(&bytes);
+        let out = <Bn254 as Fp2Element>::from_bytes_be(&bytes).unwrap();
 
         Some(out).filter(|_| is_some)
     }
@@ -405,7 +406,7 @@ impl Fp2Element for Bn254 {
         let bytes: [u8; 65] = io::read_vec().try_into().unwrap();
         let is_some = bytes[64] == 1;
         let bytes = bytes[..64].try_into().unwrap();
-        let out = <Bn254 as Fp2Element>::from_bytes_slice(bytes);
+        let out = <Bn254 as Fp2Element>::from_bytes_be(bytes).unwrap();
 
         Some(out).filter(|_| is_some)
     }

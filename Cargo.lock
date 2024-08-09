@@ -996,6 +996,7 @@ dependencies = [
  "rand_core",
  "rang",
  "sp1-derive",
+ "sp1-lib",
  "sp1-zkvm",
  "substrate-bn",
  "subtle",

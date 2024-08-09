@@ -11,10 +11,9 @@ rand = "0.8.5"
 rand_core = "0.6.4"
 rang = "0.1.1"
 subtle = "2.6.1"
-# sp1-zkvm = { path = "../sp1/zkvm/entrypoint" }
-sp1-zkvm = { git = "https://github.com/succinctlabs/sp1", branch = "experimental" }
-# sp1-derive = { path = "../sp1/derive" }
 sp1-derive = { git = "https://github.com/succinctlabs/sp1", branch = "experimental" }
+sp1-lib = { git = "https://github.com/succinctlabs/sp1", branch = "experimental" }
+sp1-zkvm = { git = "https://github.com/succinctlabs/sp1", branch = "experimental" }
 substrate-bn = "0.6.0"
 crunchy = "0.2.2"
 byteorder = "1.5.0"
