@@ -6,7 +6,7 @@ use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use rand::RngCore;
 #[cfg(target_os = "zkvm")]
-use sp1_lib::io;
+use sp1_lib::io::{self, unconstrained};
 
 pub trait Fp6Element: Fp2Element {
     fn from_bytes_slice(bytes: &[u8]) -> Fp6<Self>;
