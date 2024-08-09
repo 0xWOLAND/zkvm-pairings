@@ -5,6 +5,8 @@ use core::fmt;
 use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use rand::RngCore;
+#[cfg(target_os = "zkvm")]
+use sp1_lib::io;
 
 pub trait Fp6Element: Fp2Element {
     fn from_bytes_slice(bytes: &[u8]) -> Fp6<Self>;
@@ -133,11 +135,6 @@ impl Fp6Element for Bls12381 {
 
     #[cfg(target_os = "zkvm")]
     fn invert(f: &Fp6<Bls12381>) -> Option<Fp6<Bls12381>> {
-        use sp1_zkvm::{
-            io::FD_HINT,
-            lib::{io, unconstrained},
-        };
-
         unconstrained! {
             let mut buf = [0u8; 289];
             match Fp6Element::_invert(&f) {
@@ -148,7 +145,7 @@ impl Fp6Element for Bls12381 {
                 None => {}
             }
 
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let bytes: [u8; 289] = io::read_vec().try_into().unwrap();
@@ -247,11 +244,6 @@ impl Fp6Element for Bn254 {
 
     #[cfg(target_os = "zkvm")]
     fn invert(f: &Fp6<Self>) -> Option<Fp6<Self>> {
-        use sp1_zkvm::{
-            io::FD_HINT,
-            lib::{io, unconstrained},
-        };
-
         unconstrained! {
             let mut buf = [0u8; 257];
             match Fp6Element::_invert(&f) {
@@ -262,7 +254,7 @@ impl Fp6Element for Bn254 {
                 None => {}
             }
 
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let bytes: [u8; 257] = io::read_vec().try_into().unwrap();

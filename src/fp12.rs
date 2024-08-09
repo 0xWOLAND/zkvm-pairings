@@ -9,6 +9,9 @@ use std::str::FromStr;
 use num_bigint::BigUint;
 use rand::RngCore;
 
+#[cfg(target_os = "zkvm")]
+use sp1_lib::io;
+
 pub trait Fp12Element: Fp6Element {
     type Fp12ElementType;
     fn from_bytes_slice(bytes: &[u8]) -> Self::Fp12ElementType;
@@ -211,11 +214,6 @@ impl Fp12Element for Bls12381 {
 
     #[cfg(target_os = "zkvm")]
     fn invert(f: &Fp12<Self>) -> Option<Fp12<Self>> {
-        use sp1_zkvm::{
-            io::FD_HINT,
-            lib::{io, unconstrained},
-        };
-
         unconstrained! {
             let mut buf = [0u8; 577];
             match Fp12Element::_invert(&f) {
@@ -226,7 +224,7 @@ impl Fp12Element for Bls12381 {
                 None => {}
             }
 
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let bytes: [u8; 577] = io::read_vec().try_into().unwrap();
@@ -320,11 +318,6 @@ impl Fp12Element for Bn254 {
 
     #[cfg(target_os = "zkvm")]
     fn invert(f: &Fp12<Self>) -> Option<Fp12<Self>> {
-        use sp1_zkvm::{
-            io::FD_HINT,
-            lib::{io, unconstrained},
-        };
-
         unconstrained! {
             let mut buf = [0u8; 513];
             match Fp12Element::_invert(&f) {
@@ -335,7 +328,7 @@ impl Fp12Element for Bn254 {
                 None => {}
             }
 
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let bytes: [u8; 513] = io::read_vec().try_into().unwrap();

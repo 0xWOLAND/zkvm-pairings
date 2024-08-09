@@ -10,9 +10,7 @@ use std::str::FromStr;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
-        use sp1_zkvm::syscalls::{syscall_bls12381_fp_mulmod, syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod, syscall_bn254_fp_addmod, syscall_bn254_fp_submod, syscall_bn254_fp_mulmod};
-        use sp1_zkvm::io::{self, FD_HINT};
-        use sp1_zkvm::lib::unconstrained;
+        use sp1_lib::{syscall_bls12381_fp_mulmod, syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod, syscall_bn254_fp_addmod, syscall_bn254_fp_submod, syscall_bn254_fp_mulmod, unconstrained, io};
     }
 }
 
@@ -178,7 +176,7 @@ impl FpElement for Bls12381 {
         unconstrained! {
             let mut buf = [0u8; 48];
             buf.copy_from_slice(&self._sqrt().to_bytes());
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let byte_vec = io::read_vec();
@@ -210,7 +208,7 @@ impl FpElement for Bls12381 {
         unconstrained! {
             let mut buf = [0u8; 48];
             buf.copy_from_slice(&self._invert().to_bytes());
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let byte_vec = io::read_vec();
@@ -562,7 +560,7 @@ impl FpElement for Bn254 {
         unconstrained! {
             let mut buf = [0u8; 32];
             buf.copy_from_slice(&self._sqrt().to_bytes());
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let byte_vec = io::read_vec();
@@ -591,7 +589,7 @@ impl FpElement for Bn254 {
         unconstrained! {
             let mut buf = [0u8; 32];
             buf.copy_from_slice(&self._invert().to_bytes());
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let byte_vec = io::read_vec();

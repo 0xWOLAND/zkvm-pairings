@@ -7,12 +7,9 @@ use std::str::FromStr;
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
         use sp1_lib::{
-            io::{self, FD_HINT},
-            unconstrained,
-        };
-        use sp1_zkvm::syscalls::{
             syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_mulmod, syscall_bls12381_fp2_submod,
             syscall_bn254_fp2_addmod, syscall_bn254_fp2_mulmod, syscall_bn254_fp2_submod,
+            io, unconstrained
         };
         use std::mem::transmute;
     }
@@ -100,7 +97,7 @@ impl Fp2Element for Bls12381 {
                 None => {}
             }
 
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let bytes: [u8; 97] = io::read_vec().try_into().unwrap();
@@ -158,11 +155,6 @@ impl Fp2Element for Bls12381 {
 
     #[cfg(target_os = "zkvm")]
     fn sqrt(f: &Fp2<Bls12381>) -> Option<Fp2<Bls12381>> {
-        use sp1_zkvm::{
-            io::FD_HINT,
-            lib::{io, unconstrained},
-        };
-
         unconstrained! {
             let mut buf = [0u8; 97];
             match Fp2Element::_sqrt(&f) {
@@ -173,7 +165,7 @@ impl Fp2Element for Bls12381 {
                 None => {}
             }
 
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let byte_vec: [u8; 96] = io::read_vec().try_into().unwrap();
@@ -315,11 +307,6 @@ impl Fp2Element for Bn254 {
 
     #[cfg(target_os = "zkvm")]
     fn invert(f: &Fp2<Self>) -> Option<Fp2<Self>> {
-        use sp1_zkvm::{
-            io::FD_HINT,
-            lib::{io, unconstrained},
-        };
-
         unconstrained! {
             let mut buf = [0u8; 65];
             match Fp2Element::_invert(f) {
@@ -330,7 +317,7 @@ impl Fp2Element for Bn254 {
                 None => {}
             }
 
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let bytes: [u8; 65] = io::read_vec().try_into().unwrap();
@@ -385,11 +372,6 @@ impl Fp2Element for Bn254 {
 
     #[cfg(target_os = "zkvm")]
     fn sqrt(f: &Fp2<Self>) -> Option<Fp2<Self>> {
-        use sp1_zkvm::{
-            io::FD_HINT,
-            lib::{io, unconstrained},
-        };
-
         unconstrained! {
             let mut buf = [0u8; 97];
             match Fp2Element::_sqrt(&f) {
@@ -400,7 +382,7 @@ impl Fp2Element for Bn254 {
                 None => {}
             }
 
-            io::write(FD_HINT, &buf);
+            io::write(io::FD_HINT, &buf);
         }
 
         let bytes: [u8; 65] = io::read_vec().try_into().unwrap();
