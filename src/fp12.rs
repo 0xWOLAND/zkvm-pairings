@@ -245,40 +245,52 @@ impl Fp12Element for Bn254 {
             0 => [Self::one(); 2],
             1 => [
                 Self::from_raw_unchecked([
-                    12653890742059813127,
-                    14585784200204367754,
-                    1278438861261381767,
-                    212598772761311868,
+                    0xd35d438dc58f0d9d,
+                    0x0a78eb28f5c70b3d,
+                    0x666ea36f7879462c,
+                    0x0e0a77c19a07df2f,
                 ]),
-                Self::from_raw_unchecked([
-                    11683091849979440498,
-                    14992204589386555739,
-                    15866167890766973222,
-                    1200023580730561873,
-                ]),
+                // Self::from_raw_unchecked([
+                //     11683091849979440498,
+                //     14992204589386555739,
+                //     15866167890766973222,
+                //     1200023580730561873,
+                // ]),
+                Self::zero(),
             ],
             2 => [
                 Self::from_raw_unchecked([
-                    14595462726357228530,
-                    17349508522658994025,
-                    1017833795229664280,
-                    299787779797702374,
+                    0xaf9ba69633144907,
+                    0xca6b1d7387afb78a,
+                    0x11bded5ef08a2087,
+                    0x02f34d751a1f3a7c,
                 ]),
-                Self::zero(),
+                // Self::zero(),
+                Self::from_raw_unchecked([
+                    0xa222ae234c492d72,
+                    0xd00f02a4565de15b,
+                    0xdc2ff3a253dfc926,
+                    0x10a75716b3899551,
+                ]),
             ],
             3 => [
                 Self::from_raw_unchecked([
-                    3914496794763385213,
-                    790120733010914719,
-                    7322192392869644725,
-                    581366264293887267,
+                    // 3914496794763385213,
+                    // 790120733010914719,
+                    // 7322192392869644725,
+                    // 581366264293887267,
+                    0xca8d800500fa1bf2,
+                    0xf0c5d61468b39769,
+                    0x0e201271ad0d4418,
+                    0x04290f65bad856e6,
                 ]),
-                Self::from_raw_unchecked([
-                    12817045492518885689,
-                    4440270538777280383,
-                    11178533038884588256,
-                    2767537931541304486,
-                ]),
+                // Self::from_raw_unchecked([
+                //     12817045492518885689,
+                //     4440270538777280383,
+                //     11178533038884588256,
+                //     2767537931541304486,
+                // ]),
+                Self::zero(),
             ],
             _ => unimplemented!(),
         }
@@ -686,159 +698,273 @@ impl<'a, 'b, F: Fp12Element> Div<&'b Fp12<F>> for &'a Fp12<F> {
 mod tests {
     use super::*;
 
-    macro_rules! fp12_tests {
-        ($curve:ident, $rand_fn:ident, $curve_test:ident) => {
-            mod $curve_test {
-                use super::*;
+    mod bls12381_fp12_test {
+        use super::*;
 
-                #[test]
-                fn test_equality() {
-                    let rng = &mut rand::thread_rng();
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = a;
-                        assert_eq!(a, b);
-                    }
-                }
+        fn bls12381_fp12_rand() -> Fp12<Bls12381> {
+            let mut rng = rand::thread_rng();
+            Fp12::new(
+                Fp6::new(
+                    Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                    Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                    Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                ),
+                Fp6::new(
+                    Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                    Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                    Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                ),
+            )
+        }
 
-                #[test]
-                fn test_inequality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        if a != b {
-                            assert_ne!(a, b);
-                        }
-                    }
-                }
+        #[test]
+        fn test_equality() {
+            let rng = &mut rand::thread_rng();
+            for _ in 0..10 {
+                let a = bls12381_fp12_rand();
+                let b = a;
+                assert_eq!(a, b);
+            }
+        }
 
-                #[test]
-                fn test_addition_subtraction() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // commutative
-                        assert_eq!(a + b, b + a);
-                        assert_eq!(a + (b + c), (a + b) + c);
-
-                        // additive identity
-                        assert_eq!(a + Fp12::<$curve>::zero(), a);
-                        assert_eq!(a - Fp12::<$curve>::zero(), a);
-
-                        assert_eq!(Fp12::<$curve>::zero() - a, -a);
-                        assert_eq!(a - b, a + (-b));
-                        assert_eq!(a - b, a + (b * -Fp12::<$curve>::one()));
-
-                        assert_eq!(-a, Fp12::<$curve>::zero() - a);
-                        assert_eq!(-a, a * -Fp12::<$curve>::one());
-                    }
-                }
-
-                #[test]
-                fn test_multiplication() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // commutative
-                        assert_eq!(a * b, b * a);
-
-                        // associative
-                        assert_eq!(a * (b * c), (a * b) * c);
-
-                        // distributive
-                        assert_eq!(a * (b + c), a * b + a * c);
-                    }
-                }
-
-                #[test]
-                fn test_square_equality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        assert_eq!(a.square(), a * a);
-                    }
-                }
-
-                #[test]
-                fn test_inversion() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        if !a.is_zero() {
-                            assert_eq!(a * a.invert().unwrap(), Fp12::<$curve>::one());
-                            assert_eq!(a.invert().unwrap().invert().unwrap(), a);
-                        }
-                    }
-                }
-
-                #[test]
-                fn test_frobenius() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        {
-                            let b = (0..12).fold(a, |acc, _| acc.frobenius_map());
-                            assert_eq!(a, b);
-                        }
-                        // {
-                        //     let k = rand::random::<usize>() % 12;
-                        //     println!("k = {}", k);
-                        //     let lhs = a.nth_frobenius_map(k);
-                        //     let rhs = (0..k).fold(a, |acc, _| acc.frobenius_map());
-
-                        //     assert_eq!(lhs, rhs);
-                        // }
-                    }
-                }
-
-                #[test]
-                fn test_cyclotomic_square() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        assert_eq!(a.cyclotomic_square(), a.n_cyclotomic_square(1));
-                        assert_eq!(
-                            a.cyclotomic_square().cyclotomic_square(),
-                            a.n_cyclotomic_square(2)
-                        );
-                    }
+        #[test]
+        fn test_inequality() {
+            for _ in 0..10 {
+                let a = bls12381_fp12_rand();
+                let b = bls12381_fp12_rand();
+                if a != b {
+                    assert_ne!(a, b);
                 }
             }
-        };
+        }
+
+        #[test]
+        fn test_addition_subtraction() {
+            for _ in 0..10 {
+                let a = bls12381_fp12_rand();
+                let b = bls12381_fp12_rand();
+                let c = bls12381_fp12_rand();
+
+                // commutative
+                assert_eq!(a + b, b + a);
+                assert_eq!(a + (b + c), (a + b) + c);
+
+                // additive identity
+                assert_eq!(a + Fp12::<Bls12381>::zero(), a);
+                assert_eq!(a - Fp12::<Bls12381>::zero(), a);
+
+                assert_eq!(Fp12::<Bls12381>::zero() - a, -a);
+                assert_eq!(a - b, a + (-b));
+                assert_eq!(a - b, a + (b * -Fp12::<Bls12381>::one()));
+
+                assert_eq!(-a, Fp12::<Bls12381>::zero() - a);
+                assert_eq!(-a, a * -Fp12::<Bls12381>::one());
+            }
+        }
+
+        #[test]
+        fn test_multiplication() {
+            for _ in 0..10 {
+                let a = bls12381_fp12_rand();
+                let b = bls12381_fp12_rand();
+                let c = bls12381_fp12_rand();
+
+                // commutative
+                assert_eq!(a * b, b * a);
+
+                // associative
+                assert_eq!(a * (b * c), (a * b) * c);
+
+                // distributive
+                assert_eq!(a * (b + c), a * b + a * c);
+            }
+        }
+
+        #[test]
+        fn test_square_equality() {
+            for _ in 0..10 {
+                let a = bls12381_fp12_rand();
+                assert_eq!(a.square(), a * a);
+            }
+        }
+
+        #[test]
+        fn test_inversion() {
+            for _ in 0..10 {
+                let a = bls12381_fp12_rand();
+                if !a.is_zero() {
+                    assert_eq!(a * a.invert().unwrap(), Fp12::<Bls12381>::one());
+                    assert_eq!(a.invert().unwrap().invert().unwrap(), a);
+                }
+            }
+        }
+
+        #[test]
+        fn test_frobenius() {
+            for _ in 0..10 {
+                let a = bls12381_fp12_rand();
+                {
+                    let b = (0..12).fold(a, |acc, _| acc.frobenius_map());
+                    assert_eq!(a, b);
+                }
+            }
+        }
+
+        #[test]
+        fn test_cyclotomic_square() {
+            for _ in 0..10 {
+                let a = bls12381_fp12_rand();
+                assert_eq!(a.cyclotomic_square(), a.n_cyclotomic_square(1));
+                assert_eq!(
+                    a.cyclotomic_square().cyclotomic_square(),
+                    a.n_cyclotomic_square(2)
+                );
+            }
+        }
     }
 
-    fn bls12381_fp12_rand() -> Fp12<Bls12381> {
-        let mut rng = rand::thread_rng();
-        Fp12::new(
-            Fp6::new(
-                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
-                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
-                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
-            ),
-            Fp6::new(
-                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
-                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
-                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
-            ),
-        )
-    }
+    mod bn254_fp12_test {
+        use super::*;
 
-    fn bn254_fp12_rand() -> Fp12<Bn254> {
-        let mut rng = rand::thread_rng();
-        Fp12::new(
-            Fp6::new(
-                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
-                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
-                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
-            ),
-            Fp6::new(
-                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
-                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
-                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
-            ),
-        )
-    }
+        fn bn254_fp12_rand() -> Fp12<Bn254> {
+            let mut rng = rand::thread_rng();
+            Fp12::new(
+                Fp6::new(
+                    Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                    Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                    Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                ),
+                Fp6::new(
+                    Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                    Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                    Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                ),
+            )
+        }
 
-    fp12_tests!(Bls12381, bls12381_fp12_rand, bls12381_fp12_test);
-    fp12_tests!(Bn254, bn254_fp12_rand, bn254_fp12_test);
+        #[test]
+        fn test_equality() {
+            let rng = &mut rand::thread_rng();
+            for _ in 0..10 {
+                let a = bn254_fp12_rand();
+                let b = a;
+                assert_eq!(a, b);
+            }
+        }
+
+        #[test]
+        fn test_inequality() {
+            for _ in 0..10 {
+                let a = bn254_fp12_rand();
+                let b = bn254_fp12_rand();
+                if a != b {
+                    assert_ne!(a, b);
+                }
+            }
+        }
+
+        #[test]
+        fn test_addition_subtraction() {
+            for _ in 0..10 {
+                let a = bn254_fp12_rand();
+                let b = bn254_fp12_rand();
+                let c = bn254_fp12_rand();
+
+                // commutative
+                assert_eq!(a + b, b + a);
+                assert_eq!(a + (b + c), (a + b) + c);
+
+                // additive identity
+                assert_eq!(a + Fp12::<Bn254>::zero(), a);
+                assert_eq!(a - Fp12::<Bn254>::zero(), a);
+
+                assert_eq!(Fp12::<Bn254>::zero() - a, -a);
+                assert_eq!(a - b, a + (-b));
+                assert_eq!(a - b, a + (b * -Fp12::<Bn254>::one()));
+
+                assert_eq!(-a, Fp12::<Bn254>::zero() - a);
+                assert_eq!(-a, a * -Fp12::<Bn254>::one());
+            }
+        }
+
+        #[test]
+        fn test_multiplication() {
+            for _ in 0..10 {
+                let a = bn254_fp12_rand();
+                let b = bn254_fp12_rand();
+                let c = bn254_fp12_rand();
+
+                // commutative
+                assert_eq!(a * b, b * a);
+
+                // associative
+                assert_eq!(a * (b * c), (a * b) * c);
+
+                // distributive
+                assert_eq!(a * (b + c), a * b + a * c);
+            }
+        }
+
+        #[test]
+        fn test_square_equality() {
+            for _ in 0..10 {
+                let a = bn254_fp12_rand();
+                assert_eq!(a.square(), a * a);
+            }
+        }
+
+        #[test]
+        fn test_inversion() {
+            for _ in 0..10 {
+                let a = bn254_fp12_rand();
+                if !a.is_zero() {
+                    assert_eq!(a * a.invert().unwrap(), Fp12::<Bn254>::one());
+                    assert_eq!(a.invert().unwrap().invert().unwrap(), a);
+                }
+            }
+        }
+
+        #[test]
+        fn test_frobenius() {
+            for _ in 0..10 {
+                let a = bn254_fp12_rand();
+                {
+                    let b = (0..12).fold(a, |acc, _| acc.frobenius_map());
+                    assert_eq!(a, b);
+                }
+            }
+        }
+
+        #[test]
+        fn test_cyclotomic_square() {
+            for _ in 0..10 {
+                let a = bn254_fp12_rand();
+                assert_eq!(a.cyclotomic_square(), a.n_cyclotomic_square(1));
+                assert_eq!(
+                    a.cyclotomic_square().cyclotomic_square(),
+                    a.n_cyclotomic_square(2)
+                );
+            }
+        }
+
+        #[test]
+        fn test_bn254_frobenius() {
+            let mut init = bn254_fp12_rand();
+            for _ in 0..12 {
+                println!("init: {:?}", init);
+                init = init.frobenius_map();
+            }
+        }
+
+        #[test]
+        fn test_mul_ne() {
+            let a1 = bn254_fp12_rand();
+            let a2 = bn254_fp12_rand();
+
+            let b1 = bn254_fp12_rand();
+            let b2 = bn254_fp12_rand();
+
+            assert_ne!(a1 * a2, b1 * b2);
+        }
+    }
 }

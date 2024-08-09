@@ -14,7 +14,7 @@ use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 use crate::fp::{Bls12381, Bn254, FpElement};
 use crate::utils::{adc, sbb};
 
-pub(crate) trait FrElement: FpElement {
+pub trait FrElement: FpElement {
     const FR_BITS: u32;
     const FR_MODULUS: [u64; 4];
     const FR_R: [u64; 4];
@@ -149,7 +149,8 @@ impl FrElement for Bn254 {
         0x09226b6e22c6f0ca,
     ];
 
-    const FR_MODULUS_STR: &'static str = "";
+    const FR_MODULUS_STR: &'static str =
+        "0x43e1f593f00000012833e84879b97091b85045b68181585d30644e72e131a029";
 }
 
 /// Represents an element of the scalar field $\mathbb{F}_q$ of the BLS12-381 elliptic
@@ -178,7 +179,7 @@ impl<F: FrElement> fmt::Display for Fr<F> {
 
 impl<F: FrElement> From<u64> for Fr<F> {
     fn from(val: u64) -> Fr<F> {
-        Fr::from_raw([val, 0, 0, 0])
+        Fr::from_raw_unchecked([val, 0, 0, 0])
     }
 }
 
@@ -200,7 +201,7 @@ impl<F: FrElement> PartialEq for Fr<F> {
 
 impl<F: FrElement> ConditionallySelectable for Fr<F> {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
-        Fr::from_raw([
+        Fr::from_raw_unchecked([
             u64::conditional_select(&a.0[0], &b.0[0], choice),
             u64::conditional_select(&a.0[1], &b.0[1], choice),
             u64::conditional_select(&a.0[2], &b.0[2], choice),
@@ -226,7 +227,7 @@ impl<'a, F: FrElement> Neg for &'a Fr<F> {
         // zero if `self` was zero, and `u64::max_value()` if self was nonzero.
         let mask = (((self.0[0] | self.0[1] | self.0[2] | self.0[3]) == 0) as u64).wrapping_sub(1);
 
-        Fr::from_raw([d0 & mask, d1 & mask, d2 & mask, d3 & mask])
+        Fr::from_raw_unchecked([d0 & mask, d1 & mask, d2 & mask, d3 & mask])
     }
 }
 
@@ -242,7 +243,7 @@ impl<F: FrElement> Neg for Fr<F> {
 impl<F: FrElement> Add<Fr<F>> for Fr<F> {
     type Output = Fr<F>;
 
-    #[inline]
+    // #[inline]
     fn add(self, rhs: Fr<F>) -> Fr<F> {
         let (d0, carry) = adc(self.0[0], rhs.0[0], 0);
         let (d1, carry) = adc(self.0[1], rhs.0[1], carry);
@@ -251,7 +252,7 @@ impl<F: FrElement> Add<Fr<F>> for Fr<F> {
 
         // Attempt to subtract the modulus, to ensure the value
         // is smaller than the modulus.
-        (&Fr::from_raw([d0, d1, d2, d3])).sub(Fr::from_raw(F::FR_MODULUS))
+        (&Fr::from_raw_unchecked([d0, d1, d2, d3])).sub(Fr::from_raw_unchecked(F::FR_MODULUS))
     }
 }
 
@@ -272,7 +273,7 @@ impl<F: FrElement> Sub<Fr<F>> for Fr<F> {
         let (d2, carry) = adc(d2, F::FR_MODULUS[2] & borrow, carry);
         let (d3, _) = adc(d3, F::FR_MODULUS[3] & borrow, carry);
 
-        Fr::from_raw([d0, d1, d2, d3])
+        Fr::from_raw_unchecked([d0, d1, d2, d3])
     }
 }
 
@@ -381,13 +382,13 @@ impl<F: FrElement> Fr<F> {
     /// Returns zero, the additive identity.
     #[inline]
     pub const fn zero() -> Fr<F> {
-        Fr::from_raw([0, 0, 0, 0])
+        Fr::from_raw_unchecked([0, 0, 0, 0])
     }
 
     /// Returns one, the multiplicative identity.
     #[inline]
     pub const fn one() -> Fr<F> {
-        Fr::from_raw([1, 0, 0, 0])
+        Fr::from_raw_unchecked([1, 0, 0, 0])
     }
 
     /// Doubles this field element.
@@ -406,7 +407,7 @@ impl<F: FrElement> Fr<F> {
     /// Attempts to convert a little-endian byte representation of
     /// a scalar into a `Scalar`, failing if the input is not canonical.
     pub fn from_bytes(bytes: &[u8; 32]) -> CtOption<Fr<F>> {
-        let mut tmp = Fr::from_raw([0, 0, 0, 0]);
+        let mut tmp = Fr::from_raw_unchecked([0, 0, 0, 0]);
 
         tmp.0[0] = u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap());
         tmp.0[1] = u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[8..16]).unwrap());
@@ -464,14 +465,14 @@ impl<F: FrElement> Fr<F> {
         // 1. the lower bits are multiplied by R^2, as normal
         // 2. the upper bits are multiplied by R^2 * 2^256 = R^3
 
-        let d0 = Fr::<F>::from_raw([limbs[0], limbs[1], limbs[2], limbs[3]]);
-        let d1 = Fr::<F>::from_raw([limbs[4], limbs[5], limbs[6], limbs[7]]);
-        d0 + d1 * Fr::from_raw(F::FR_R)
+        let d0 = Fr::<F>::from_raw_unchecked([limbs[0], limbs[1], limbs[2], limbs[3]]);
+        let d1 = Fr::<F>::from_raw_unchecked([limbs[4], limbs[5], limbs[6], limbs[7]]);
+        d0 + d1 * Fr::from_raw_unchecked(F::FR_R)
     }
 
     /// Converts from an integer represented in little endian
     /// into its (congruent) `Scalar` representation.
-    pub const fn from_raw(val: [u64; 4]) -> Self {
+    pub const fn from_raw_unchecked(val: [u64; 4]) -> Self {
         Fr(val, PhantomData::<F>)
     }
 
@@ -678,12 +679,12 @@ impl<F: FrElement + 'static> PrimeField for Fr<F> {
     const MODULUS: &'static str = F::FR_MODULUS_STR;
     const NUM_BITS: u32 = F::FR_BITS as u32;
     const CAPACITY: u32 = Self::NUM_BITS - 1;
-    const TWO_INV: Self = Fr::from_raw(F::FR_TWO_INV);
-    const MULTIPLICATIVE_GENERATOR: Self = Fr::from_raw(F::FR_GENERATOR);
+    const TWO_INV: Self = Fr::from_raw_unchecked(F::FR_TWO_INV);
+    const MULTIPLICATIVE_GENERATOR: Self = Fr::from_raw_unchecked(F::FR_GENERATOR);
     const S: u32 = F::FR_S;
-    const ROOT_OF_UNITY: Self = Fr::from_raw(F::FR_ROOT_OF_UNITY);
-    const ROOT_OF_UNITY_INV: Self = Fr::from_raw(F::FR_ROOT_OF_UNITY_INV);
-    const DELTA: Self = Fr::from_raw(F::FR_DELTA);
+    const ROOT_OF_UNITY: Self = Fr::from_raw_unchecked(F::FR_ROOT_OF_UNITY);
+    const ROOT_OF_UNITY_INV: Self = Fr::from_raw_unchecked(F::FR_ROOT_OF_UNITY_INV);
+    const DELTA: Self = Fr::from_raw_unchecked(F::FR_DELTA);
 }
 
 impl<T, F: FrElement> core::iter::Sum<T> for Fr<F>
@@ -710,147 +711,260 @@ where
     }
 }
 
-mod tests {
-    use crate::fp::Bn254;
-
+#[cfg(test)]
+mod fr_tests {
     use super::*;
+    use rand::Rng;
 
-    macro_rules! fr_tests {
-        ($curve:ident, $rand_fn:ident, $curve_test: ident) => {
-            mod $curve_test {
-                use super::*;
-
-                #[test]
-                fn test_equality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = a;
-                        assert_eq!(a, b);
-                    }
-                }
-
-                #[test]
-                fn test_inequality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        if a != b {
-                            assert_ne!(a, b);
-                        }
-                    }
-                }
-
-                #[test]
-                fn test_addition_subtraction() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // commutative
-                        assert_eq!(a + b, b + a);
-                        assert_eq!(a + (b + c), (a + b) + c);
-
-                        // additive identity
-                        assert_eq!(a + Fr::<$curve>::zero(), a);
-                        assert_eq!(a - Fr::<$curve>::zero(), a);
-
-                        assert_eq!(Fr::<$curve>::zero() - a, -a);
-                        assert_eq!(a - b, a + (-b));
-                        assert_eq!(a - b, a + (b * -Fr::<$curve>::one()));
-
-                        assert_eq!(-a, Fr::<$curve>::zero() - a);
-                        assert_eq!(-a, a * -Fr::<$curve>::one());
-                    }
-                }
-
-                #[test]
-                fn test_multiplication() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // commutative
-                        assert_eq!(a * b, b * a);
-
-                        // associative
-                        assert_eq!(a * (b * c), (a * b) * c);
-
-                        // distributive
-                        assert_eq!(a * (b + c), a * b + a * c);
-                    }
-                }
-
-                #[test]
-                fn test_mul_equality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-
-                        assert_eq!(a * Fr::<$curve>::zero(), Fr::<$curve>::zero());
-                        assert_eq!(a * Fr::<$curve>::one(), a);
-                        assert_eq!(a * Fr::<$curve>::from(2u64), a + a);
-                        assert_eq!(a * Fr::<$curve>::from(3u64), a + a + a);
-                        assert_eq!(a * Fr::<$curve>::from(4u64), a + a + a + a);
-                    }
-                }
-
-                #[test]
-                fn test_square_equality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        assert_eq!(a.square(), a * a);
-                    }
-                }
-
-                #[test]
-                fn test_div() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // division by one
-                        assert_eq!(a / Fr::<$curve>::one(), a);
-                        assert_eq!(a / a, Fr::<$curve>::one());
-
-                        // division by zero
-                        assert_eq!(Fr::<$curve>::zero() / a, Fr::<$curve>::zero());
-
-                        // division distributivity
-                        assert_eq!((a + b) / c, a / c + b / c);
-
-                        // division and multiplication equality
-                        if b.is_zero().unwrap_u8() == 0 {
-                            assert_eq!(a / b, a * b.invert().unwrap());
-                        }
-                    }
-                }
-
-                #[test]
-                fn test_inversion() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        if !a.is_zero().unwrap_u8() == 0 {
-                            assert_eq!(a * a.invert().unwrap(), Fr::<$curve>::one());
-                            assert_eq!(a.invert().unwrap().invert().unwrap(), a);
-                        }
-                    }
-                }
-            }
-        };
-    }
-
-    fn bls12381_fr_rand() -> Fr<Bls12381> {
+    fn fr_bls_rand() -> Fr<Bls12381> {
         let mut rng = rand::thread_rng();
         Fr::<Bls12381>::random(&mut rng)
     }
 
-    fn bn254_fr_rand() -> Fr<Bn254> {
+    fn fr_bn_rand() -> Fr<Bn254> {
         let mut rng = rand::thread_rng();
         Fr::<Bn254>::random(&mut rng)
     }
 
-    fr_tests!(Bls12381, bls12381_fr_rand, bls12381_fr_test);
-    fr_tests!(Bn254, bn254_fr_rand, bn254_fr_test);
+    // BLS12-381 Fr Tests
+
+    #[test]
+    fn test_fr_bls_equality() {
+        let rng = &mut rand::thread_rng();
+        for _ in 0..10 {
+            let x = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let a = Fr::<Bls12381>::from_raw_unchecked(x.clone().try_into().unwrap());
+            let b = Fr::<Bls12381>::from_raw_unchecked(x.try_into().unwrap());
+            assert_eq!(a, b);
+        }
+    }
+
+    #[test]
+    fn test_fr_bls_inequality() {
+        let rng = &mut rand::thread_rng();
+        for _ in 0..10 {
+            let x = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let y = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let a = Fr::<Bls12381>::from_raw_unchecked(x.try_into().unwrap());
+            let b = Fr::<Bls12381>::from_raw_unchecked(y.try_into().unwrap());
+            assert_ne!(a, b);
+        }
+    }
+
+    #[test]
+    fn test_fr_bls_addition_subtraction() {
+        for _ in 0..10 {
+            let a = fr_bls_rand();
+            let b = fr_bls_rand();
+            let c = fr_bls_rand();
+
+            assert_eq!(a + b, b + a);
+            assert_eq!(a + (b + c), (a + b) + c);
+            assert_eq!(a + Fr::<Bls12381>::zero(), a);
+            assert_eq!(a - Fr::<Bls12381>::zero(), a);
+            assert_eq!(Fr::<Bls12381>::zero() - a, -a);
+            assert_eq!(a - b, a + (-b));
+            assert_eq!(a - b, a + (b * -Fr::<Bls12381>::one()));
+            assert_eq!(-a, Fr::<Bls12381>::zero() - a);
+            assert_eq!(-a, a * -Fr::<Bls12381>::one());
+        }
+    }
+
+    #[test]
+    fn test_fr_bls_multiplication() {
+        for _ in 0..10 {
+            let a = fr_bls_rand();
+            let b = fr_bls_rand();
+            let c = fr_bls_rand();
+
+            assert_eq!(a * b, b * a);
+            assert_eq!(a * b, b * a);
+
+            // associative
+            assert_eq!(a * b, b * a);
+
+            // associative
+            assert_eq!(a * (b * c), (a * b) * c);
+            assert_eq!(a * (b * c), (a * b) * c);
+
+            // distributive
+            assert_eq!(a * (b * c), (a * b) * c);
+
+            // distributive
+            assert_eq!(a * (b + c), a * b + a * c);
+            assert_eq!(a * Fr::<Bls12381>::one(), a);
+            assert_eq!(a * Fr::<Bls12381>::zero(), Fr::<Bls12381>::zero());
+        }
+    }
+
+    #[test]
+    fn test_fr_bls_division() {
+        for _ in 0..10 {
+            let a = fr_bls_rand();
+
+            assert_eq!(a / Fr::<Bls12381>::one(), a);
+            assert_eq!(a / a, Fr::<Bls12381>::one());
+            assert_eq!(Fr::<Bls12381>::zero() / a, Fr::<Bls12381>::zero());
+
+            let a = fr_bls_rand();
+            let b = fr_bls_rand();
+            let c = fr_bls_rand();
+
+            assert_eq!((a + b) / c, a / c + b / c);
+
+            let a = fr_bls_rand();
+            let b = fr_bls_rand();
+            assert_eq!(a / b, a * b.invert().unwrap());
+        }
+    }
+
+    #[test]
+    fn test_fr_bls_inversion() {
+        for _ in 0..10 {
+            let a = fr_bls_rand();
+
+            assert_eq!(a * a.invert().unwrap(), Fr::<Bls12381>::one());
+            assert_eq!(a.invert().unwrap() * a, Fr::<Bls12381>::one());
+            assert_eq!(
+                Fr::<Bls12381>::one().invert().unwrap(),
+                Fr::<Bls12381>::one()
+            );
+            assert!(Fr::<Bls12381>::zero().invert().is_none().unwrap_u8() == 1);
+            let a = fr_bls_rand();
+            assert_eq!(a * a.invert().unwrap(), Fr::<Bls12381>::one());
+        }
+    }
+
+    #[test]
+    fn test_fr_bls_sqrt() {
+        for _ in 0..10 {
+            let a = fr_bls_rand();
+            let sqrt = a.sqrt();
+            (sqrt.is_some().unwrap_u8() == 1).then(|| {
+                assert_eq!(sqrt.unwrap() * sqrt.unwrap(), a);
+            });
+        }
+    }
+
+    #[test]
+    fn test_fr_bls_random() {
+        for _ in 0..100 {
+            let a = Fr::<Bls12381>::random(&mut rand::thread_rng());
+            let b = Fr::<Bls12381>::random(&mut rand::thread_rng());
+            assert_ne!(a, b);
+        }
+    }
+
+    #[test]
+    fn test_fr_bls_bytes() {
+        for _ in 0..10 {
+            let a = fr_bls_rand();
+            let bytes = a.to_bytes();
+            let b = Fr::<Bls12381>::from_bytes(&bytes).unwrap();
+            assert_eq!(a, b);
+        }
+    }
+
+    // BN254 Fr Tests
+
+    #[test]
+    fn test_fr_bn_equality() {
+        let rng = &mut rand::thread_rng();
+        for _ in 0..10 {
+            let x = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let a = Fr::<Bn254>::from_raw_unchecked(x.clone().try_into().unwrap());
+            let b = Fr::<Bn254>::from_raw_unchecked(x.try_into().unwrap());
+            assert_eq!(a, b);
+        }
+    }
+
+    #[test]
+    fn test_fr_bn_inequality() {
+        let rng = &mut rand::thread_rng();
+        for _ in 0..10 {
+            let x = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let y = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let a = Fr::<Bn254>::from_raw_unchecked(x.try_into().unwrap());
+            let b = Fr::<Bn254>::from_raw_unchecked(y.try_into().unwrap());
+            assert_ne!(a, b);
+        }
+    }
+
+    #[test]
+    fn test_fr_add_with_zero() {
+        for _ in 0..10 {
+            let a = fr_bn_rand();
+            let zero = Fr::<Bn254>::zero();
+            assert_eq!(a + zero, a);
+        }
+    }
+
+    #[test]
+    fn test_fr_bn_addition_subtraction() {
+        for _ in 0..10 {
+            let a = fr_bn_rand();
+            let b = fr_bn_rand();
+            let c = fr_bn_rand();
+
+            assert_eq!(a + b, b + a);
+            assert_eq!(a + (b + c), (a + b) + c);
+            assert_eq!(a + Fr::<Bn254>::zero(), a);
+            assert_eq!(a - Fr::<Bn254>::zero(), a);
+            assert_eq!(Fr::<Bn254>::zero() - a, -a);
+            assert_eq!(a - b, a + (-b));
+            assert_eq!(a - b, a + (b * -Fr::<Bn254>::one()));
+            assert_eq!(-a, Fr::<Bn254>::zero() - a);
+            assert_eq!(-a, a * -Fr::<Bn254>::one());
+        }
+    }
+
+    #[test]
+    fn test_fr_bn_multiplication() {
+        for _ in 0..10 {
+            let a = fr_bn_rand();
+            let b = fr_bn_rand();
+            let c = fr_bn_rand();
+
+            assert_eq!(a * b, b * a);
+            assert_eq!(a * (b * c), (a * b) * c);
+            assert_eq!(a * (b + c), a * b + a * c);
+            assert_eq!(a * Fr::<Bn254>::one(), a);
+            assert_eq!(a * Fr::<Bn254>::zero(), Fr::<Bn254>::zero());
+        }
+    }
+
+    #[test]
+    fn test_fr_bn_division() {
+        for _ in 0..10 {
+            let a = fr_bn_rand();
+
+            assert_eq!(a / Fr::<Bn254>::one(), a);
+            assert_eq!(a / a, Fr::<Bn254>::one());
+            assert_eq!(Fr::<Bn254>::zero() / a, Fr::<Bn254>::zero());
+
+            let a = fr_bn_rand();
+            let b = fr_bn_rand();
+            let c = fr_bn_rand();
+
+            assert_eq!((a + b) / c, a / c + b / c);
+
+            let a = fr_bn_rand();
+            let b = fr_bn_rand();
+            assert_eq!(a / b, a * b.invert().unwrap());
+        }
+    }
+
+    #[test]
+    fn test_fr_bn_inversion() {
+        for _ in 0..10 {
+            let a = fr_bn_rand();
+
+            assert_eq!(a * a.invert().unwrap(), Fr::<Bn254>::one());
+            assert_eq!(a.invert().unwrap() * a, Fr::<Bn254>::one());
+            assert_eq!(Fr::<Bn254>::one().invert().unwrap(), Fr::<Bn254>::one());
+            assert!(Fr::<Bn254>::zero().invert().is_none().unwrap_u8() == 1);
+            let a = fr_bn_rand();
+            assert_eq!(a * a.invert().unwrap(), Fr::<Bn254>::one());
+        }
+    }
 }

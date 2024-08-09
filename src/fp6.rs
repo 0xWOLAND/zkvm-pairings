@@ -591,190 +591,345 @@ mod tests {
     use super::*;
     use rand::Rng;
 
-    macro_rules! fp6_tests {
-        ($curve:ident, $rand_fn:ident, $curve_test: ident) => {
-            mod $curve_test {
-                use super::*;
+    mod bls12381_fp6_tests {
+        use super::*;
 
-                #[test]
-                fn test_equality() {
-                    let rng = &mut rand::thread_rng();
-                    for _ in 0..10 {
-                        let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-                        let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-                        let a = Fp6::<$curve>::new(
-                            Fp2::new(
-                                $curve::from_raw_unchecked(x.clone().try_into().unwrap()),
-                                $curve::from_raw_unchecked(y.clone().try_into().unwrap()),
-                            ),
-                            Fp2::new(
-                                $curve::from_raw_unchecked(x.clone().try_into().unwrap()),
-                                $curve::from_raw_unchecked(y.clone().try_into().unwrap()),
-                            ),
-                            Fp2::new(
-                                $curve::from_raw_unchecked(x.clone().try_into().unwrap()),
-                                $curve::from_raw_unchecked(y.clone().try_into().unwrap()),
-                            ),
-                        );
-                        let b = Fp6::<$curve>::new(
-                            Fp2::new(
-                                $curve::from_raw_unchecked(x.clone().try_into().unwrap()),
-                                $curve::from_raw_unchecked(y.clone().try_into().unwrap()),
-                            ),
-                            Fp2::new(
-                                $curve::from_raw_unchecked(x.clone().try_into().unwrap()),
-                                $curve::from_raw_unchecked(y.clone().try_into().unwrap()),
-                            ),
-                            Fp2::new(
-                                $curve::from_raw_unchecked(x.clone().try_into().unwrap()),
-                                $curve::from_raw_unchecked(y.clone().try_into().unwrap()),
-                            ),
-                        );
-                        assert_eq!(a, b);
-                    }
-                }
+        fn bls12381_fp6_rand() -> Fp6<Bls12381> {
+            let mut rng = rand::thread_rng();
+            Fp6::new(
+                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+                Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
+            )
+        }
 
-                #[test]
-                fn test_inequality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        if a != b {
-                            assert_ne!(a, b);
-                        }
-                    }
-                }
+        #[test]
+        fn test_equality() {
+            let rng = &mut rand::thread_rng();
+            for _ in 0..10 {
+                let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+                let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+                let a = Fp6::<Bls12381>::new(
+                    Fp2::new(
+                        Bls12381::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bls12381::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                    Fp2::new(
+                        Bls12381::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bls12381::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                    Fp2::new(
+                        Bls12381::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bls12381::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                );
+                let b = Fp6::<Bls12381>::new(
+                    Fp2::new(
+                        Bls12381::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bls12381::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                    Fp2::new(
+                        Bls12381::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bls12381::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                    Fp2::new(
+                        Bls12381::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bls12381::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                );
+                assert_eq!(a, b);
+            }
+        }
 
-                #[test]
-                fn test_addition_subtraction() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // commutative
-                        assert_eq!(a + b, b + a);
-                        assert_eq!(a + (b + c), (a + b) + c);
-
-                        // additive identity
-                        assert_eq!(a + Fp6::<$curve>::zero(), a);
-                        assert_eq!(a - Fp6::<$curve>::zero(), a);
-
-                        assert_eq!(Fp6::<$curve>::zero() - a, -a);
-                        assert_eq!(a - b, a + (-b));
-                        assert_eq!(a - b, a + (b * -Fp6::<$curve>::one()));
-
-                        assert_eq!(-a, Fp6::<$curve>::zero() - a);
-                        assert_eq!(-a, a * -Fp6::<$curve>::one());
-                    }
-                }
-
-                #[test]
-                fn test_multiplication() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // commutative
-                        assert_eq!(a * b, b * a);
-
-                        // associative
-                        assert_eq!(a * (b * c), (a * b) * c);
-
-                        // distributive
-                        assert_eq!(a * (b + c), a * b + a * c);
-                    }
-                }
-
-                #[test]
-                fn test_add_equality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-
-                        assert_eq!(a * Fp6::<$curve>::zero(), Fp6::<$curve>::zero());
-                        assert_eq!(a * Fp6::<$curve>::zero(), Fp6::<$curve>::zero());
-                        assert_eq!(a * Fp6::<$curve>::one(), a);
-                        assert_eq!(a * Fp6::<$curve>::one(), a);
-                        assert_eq!(a * Fp6::<$curve>::from(2u64), a + a);
-                        assert_eq!(a * Fp6::<$curve>::from(3u64), a + a + a);
-                        assert_eq!(a * Fp6::<$curve>::from(4u64), a + a + a + a);
-                    }
-                }
-
-                #[test]
-                fn test_square_equality() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        assert_eq!(a.square(), a * a);
-                    }
-                }
-
-                #[test]
-                fn test_div() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = $rand_fn();
-                        let c = $rand_fn();
-
-                        // division by one
-                        assert_eq!(a / Fp6::<$curve>::one(), a);
-                        assert_eq!(a / a, Fp6::<$curve>::one());
-
-                        // division by zero
-                        assert_eq!(Fp6::<$curve>::zero() / a, Fp6::<$curve>::zero());
-
-                        // division distributivity
-                        assert_eq!((a + b) / c, a / c + b / c);
-
-                        // division and multiplication equality
-                        if !b.is_zero() {
-                            assert_eq!(a / b, a * b.invert().unwrap());
-                        }
-                    }
-                }
-
-                #[test]
-                fn test_inversion() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        if !a.is_zero() {
-                            assert_eq!(a * a.invert().unwrap(), Fp6::<$curve>::one());
-                            assert_eq!(a.invert().unwrap().invert().unwrap(), a);
-                        }
-                    }
-                }
-
-                #[test]
-                fn test_frobenius() {
-                    for _ in 0..10 {
-                        let a = $rand_fn();
-                        let b = (0..6).fold(a, |acc, _| acc.frobenius_map());
-                        assert_eq!(a, b);
-                    }
+        #[test]
+        fn test_inequality() {
+            for _ in 0..10 {
+                let a = bls12381_fp6_rand();
+                let b = bls12381_fp6_rand();
+                if a != b {
+                    assert_ne!(a, b);
                 }
             }
-        };
+        }
+
+        #[test]
+        fn test_addition_subtraction() {
+            for _ in 0..10 {
+                let a = bls12381_fp6_rand();
+                let b = bls12381_fp6_rand();
+                let c = bls12381_fp6_rand();
+
+                // commutative
+                assert_eq!(a + b, b + a);
+                assert_eq!(a + (b + c), (a + b) + c);
+
+                // additive identity
+                assert_eq!(a + Fp6::<Bls12381>::zero(), a);
+                assert_eq!(a - Fp6::<Bls12381>::zero(), a);
+
+                assert_eq!(Fp6::<Bls12381>::zero() - a, -a);
+                assert_eq!(a - b, a + (-b));
+                assert_eq!(a - b, a + (b * -Fp6::<Bls12381>::one()));
+
+                assert_eq!(-a, Fp6::<Bls12381>::zero() - a);
+                assert_eq!(-a, a * -Fp6::<Bls12381>::one());
+            }
+        }
+
+        #[test]
+        fn test_multiplication() {
+            for _ in 0..10 {
+                let a = bls12381_fp6_rand();
+                let b = bls12381_fp6_rand();
+                let c = bls12381_fp6_rand();
+
+                // commutative
+                assert_eq!(a * b, b * a);
+
+                // associative
+                assert_eq!(a * (b * c), (a * b) * c);
+
+                // distributive
+                assert_eq!(a * (b + c), a * b + a * c);
+            }
+        }
+
+        #[test]
+        fn test_add_equality() {
+            for _ in 0..10 {
+                let a = bls12381_fp6_rand();
+
+                assert_eq!(a * Fp6::<Bls12381>::zero(), Fp6::<Bls12381>::zero());
+                assert_eq!(a * Fp6::<Bls12381>::zero(), Fp6::<Bls12381>::zero());
+                assert_eq!(a * Fp6::<Bls12381>::one(), a);
+                assert_eq!(a * Fp6::<Bls12381>::one(), a);
+                assert_eq!(a * Fp6::<Bls12381>::from(2u64), a + a);
+                assert_eq!(a * Fp6::<Bls12381>::from(3u64), a + a + a);
+                assert_eq!(a * Fp6::<Bls12381>::from(4u64), a + a + a + a);
+            }
+        }
+
+        #[test]
+        fn test_square_equality() {
+            for _ in 0..10 {
+                let a = bls12381_fp6_rand();
+                assert_eq!(a.square(), a * a);
+            }
+        }
+
+        #[test]
+        fn test_div() {
+            for _ in 0..10 {
+                let a = bls12381_fp6_rand();
+                let b = bls12381_fp6_rand();
+                let c = bls12381_fp6_rand();
+
+                // division by one
+                assert_eq!(a / Fp6::<Bls12381>::one(), a);
+                assert_eq!(a / a, Fp6::<Bls12381>::one());
+
+                // division by zero
+                assert_eq!(Fp6::<Bls12381>::zero() / a, Fp6::<Bls12381>::zero());
+
+                // division distributivity
+                assert_eq!((a + b) / c, a / c + b / c);
+
+                // division and multiplication equality
+                if !b.is_zero() {
+                    assert_eq!(a / b, a * b.invert().unwrap());
+                }
+            }
+        }
+
+        #[test]
+        fn test_inversion() {
+            for _ in 0..10 {
+                let a = bls12381_fp6_rand();
+                if !a.is_zero() {
+                    assert_eq!(a * a.invert().unwrap(), Fp6::<Bls12381>::one());
+                    assert_eq!(a.invert().unwrap().invert().unwrap(), a);
+                }
+            }
+        }
+
+        #[test]
+        fn test_frobenius() {
+            for _ in 0..10 {
+                let a = bls12381_fp6_rand();
+                let b = (0..6).fold(a, |acc, _| acc.frobenius_map());
+                assert_eq!(a, b);
+            }
+        }
     }
 
-    fn bls12381_fp6_rand() -> Fp6<Bls12381> {
-        let mut rng = rand::thread_rng();
-        Fp6::new(
-            Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
-            Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
-            Fp2::new(Bls12381::random(&mut rng), Bls12381::random(&mut rng)),
-        )
-    }
+    mod bn254_fp6_tests {
+        use super::*;
 
-    fn bn254_fp6_rand() -> Fp6<Bn254> {
-        let mut rng = rand::thread_rng();
-        Fp6::new(
-            Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
-            Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
-            Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
-        )
-    }
+        fn bn254_fp6_rand() -> Fp6<Bn254> {
+            let mut rng = rand::thread_rng();
+            Fp6::new(
+                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+                Fp2::new(Bn254::random(&mut rng), Bn254::random(&mut rng)),
+            )
+        }
 
-    fp6_tests!(Bls12381, bls12381_fp6_rand, bls12381_fp6_test);
-    fp6_tests!(Bn254, bn254_fp6_rand, bn254_fp6_test);
+        #[test]
+        fn test_equality() {
+            let rng = &mut rand::thread_rng();
+            for _ in 0..10 {
+                let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+                let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+                let a = Fp6::<Bn254>::new(
+                    Fp2::new(
+                        Bn254::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bn254::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                    Fp2::new(
+                        Bn254::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bn254::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                    Fp2::new(
+                        Bn254::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bn254::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                );
+                let b = Fp6::<Bn254>::new(
+                    Fp2::new(
+                        Bn254::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bn254::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                    Fp2::new(
+                        Bn254::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bn254::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                    Fp2::new(
+                        Bn254::from_raw_unchecked(x.clone().try_into().unwrap()),
+                        Bn254::from_raw_unchecked(y.clone().try_into().unwrap()),
+                    ),
+                );
+                assert_eq!(a, b);
+            }
+        }
+
+        #[test]
+        fn test_inequality() {
+            for _ in 0..10 {
+                let a = bn254_fp6_rand();
+                let b = bn254_fp6_rand();
+                if a != b {
+                    assert_ne!(a, b);
+                }
+            }
+        }
+
+        #[test]
+        fn test_addition_subtraction() {
+            for _ in 0..10 {
+                let a = bn254_fp6_rand();
+                let b = bn254_fp6_rand();
+                let c = bn254_fp6_rand();
+
+                // commutative
+                assert_eq!(a + b, b + a);
+                assert_eq!(a + (b + c), (a + b) + c);
+
+                // additive identity
+                assert_eq!(a + Fp6::<Bn254>::zero(), a);
+                assert_eq!(a - Fp6::<Bn254>::zero(), a);
+
+                assert_eq!(Fp6::<Bn254>::zero() - a, -a);
+                assert_eq!(a - b, a + (-b));
+                assert_eq!(a - b, a + (b * -Fp6::<Bn254>::one()));
+
+                assert_eq!(-a, Fp6::<Bn254>::zero() - a);
+                assert_eq!(-a, a * -Fp6::<Bn254>::one());
+            }
+        }
+
+        #[test]
+        fn test_multiplication() {
+            for _ in 0..10 {
+                let a = bn254_fp6_rand();
+                let b = bn254_fp6_rand();
+                let c = bn254_fp6_rand();
+
+                // commutative
+                assert_eq!(a * b, b * a);
+
+                // associative
+                assert_eq!(a * (b * c), (a * b) * c);
+
+                // distributive
+                assert_eq!(a * (b + c), a * b + a * c);
+            }
+        }
+
+        #[test]
+        fn test_add_equality() {
+            for _ in 0..10 {
+                let a = bn254_fp6_rand();
+
+                assert_eq!(a * Fp6::<Bn254>::zero(), Fp6::<Bn254>::zero());
+                assert_eq!(a * Fp6::<Bn254>::zero(), Fp6::<Bn254>::zero());
+                assert_eq!(a * Fp6::<Bn254>::one(), a);
+                assert_eq!(a * Fp6::<Bn254>::one(), a);
+                assert_eq!(a * Fp6::<Bn254>::from(2u64), a + a);
+                assert_eq!(a * Fp6::<Bn254>::from(3u64), a + a + a);
+                assert_eq!(a * Fp6::<Bn254>::from(4u64), a + a + a + a);
+            }
+        }
+
+        #[test]
+        fn test_square_equality() {
+            for _ in 0..10 {
+                let a = bn254_fp6_rand();
+                assert_eq!(a.square(), a * a);
+            }
+        }
+
+        #[test]
+        fn test_div() {
+            for _ in 0..10 {
+                let a = bn254_fp6_rand();
+                let b = bn254_fp6_rand();
+                let c = bn254_fp6_rand();
+
+                // division by one
+                assert_eq!(a / Fp6::<Bn254>::one(), a);
+                assert_eq!(a / a, Fp6::<Bn254>::one());
+
+                // division by zero
+                assert_eq!(Fp6::<Bn254>::zero() / a, Fp6::<Bn254>::zero());
+
+                // division distributivity
+                assert_eq!((a + b) / c, a / c + b / c);
+
+                // division and multiplication equality
+                if !b.is_zero() {
+                    assert_eq!(a / b, a * b.invert().unwrap());
+                }
+            }
+        }
+
+        #[test]
+        fn test_inversion() {
+            for _ in 0..10 {
+                let a = bn254_fp6_rand();
+                if !a.is_zero() {
+                    assert_eq!(a * a.invert().unwrap(), Fp6::<Bn254>::one());
+                    assert_eq!(a.invert().unwrap().invert().unwrap(), a);
+                }
+            }
+        }
+
+        #[test]
+        fn test_frobenius() {
+            for _ in 0..10 {
+                let a = bn254_fp6_rand();
+                let b = (0..6).fold(a, |acc, _| acc.frobenius_map());
+                assert_eq!(a, b);
+            }
+        }
+    }
 }

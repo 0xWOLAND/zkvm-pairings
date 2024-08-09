@@ -288,9 +288,10 @@ impl<F: G1Element> G1Affine<F> {
     }
 
     fn is_valid(&self) -> Result<(), String> {
-        self.is_identity()
-            .then(|| ())
-            .ok_or_else(|| F::is_valid(&self).unwrap_err())
+        if self.is_identity() {
+            return Ok(());
+        }
+        F::is_valid(&self)
     }
 
     fn mul_by_x(&self) -> Self {
@@ -448,7 +449,8 @@ mod bls12381_g1_affine_test {
             ]),
             false,
         );
-        assert!(G1Affine::<Bls12381>::generator().is_valid().unwrap() == ());
+        assert!(G1Affine::<Bls12381>::generator().is_valid().is_ok());
+        assert!(a.is_valid().is_ok());
     }
 
     #[test]
@@ -589,8 +591,8 @@ mod bn254_g1_affine_test {
     fn test_equality() {
         let rng = &mut rand::thread_rng();
         for _ in 0..10 {
-            let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
-            let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let x = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
+            let y = (0..4).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
             let a = G1Affine::<Bn254>::from_raw_unchecked(
                 Bn254::from_raw_unchecked(x.clone().try_into().unwrap()),
