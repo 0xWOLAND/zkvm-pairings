@@ -1111,6 +1111,9 @@ mod substrate_bn_tests {
     }
 
     fn check_eq(lhs: Fq2, rhs: Fp2<Bn254>) -> bool {
+        println!("lhs: {:?}", lhs);
+        println!("rhs: {:?}", rhs);
+
         let lhs_bytes = fq2_to_slice(lhs);
         let rhs_bytes: [u8; 64] = Fp2Element::to_bytes_vec(&rhs).try_into().unwrap();
 
@@ -1119,12 +1122,15 @@ mod substrate_bn_tests {
 
     fn fq2_to_slice(f: Fq2) -> [u8; 64] {
         let mut slice = [0u8; 64];
-        f.real().to_big_endian(slice[0..32].as_mut()).unwrap();
+        f.real().to_big_endian(slice[..32].as_mut()).unwrap();
         f.imaginary().to_big_endian(slice[32..].as_mut()).unwrap();
 
-        println!("slice: {:?}", slice);
+        let real = BigUint::from_bytes_be(&slice[..32]);
+        let imag = BigUint::from_bytes_be(&slice[32..]);
 
-        slice
+        let f = real + imag * Bn254::modulus();
+
+        f.to_bytes_be().try_into().unwrap()
     }
 
     #[test]
