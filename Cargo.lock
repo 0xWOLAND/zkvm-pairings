@@ -77,6 +77,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "byteorder"
+version = "1.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b"
+
+[[package]]
 name = "cairo-rs"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -122,6 +128,12 @@ checksum = "53fe5e26ff1b7aef8bca9c6080520cfb8d9333c7568e1829cef191a9723e5504"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crunchy"
+version = "0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a81dae078cea95a014a339291cec439d2f232ebe854a9d672b796c6afafa9b7"
 
 [[package]]
 name = "crypto-common"
@@ -487,6 +499,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "hex"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
+
+[[package]]
 name = "itertools"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -500,6 +518,9 @@ name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
+dependencies = [
+ "spin",
+]
 
 [[package]]
 name = "libc"
@@ -703,6 +724,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustc-hex"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e75f6a532d0fd9f7f13144f392b6ad56a32696bfcd9c78f797f16bbb6f072d6"
+
+[[package]]
 name = "serde"
 version = "1.0.204"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -744,7 +771,8 @@ dependencies = [
 
 [[package]]
 name = "sp1-derive"
-version = "1.0.1"
+version = "1.1.1"
+source = "git+https://github.com/succinctlabs/sp1?branch=experimental#0560027894de878fae1259d7dbe8d76f5310d2c6"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -753,7 +781,8 @@ dependencies = [
 
 [[package]]
 name = "sp1-lib"
-version = "1.0.1"
+version = "1.1.1"
+source = "git+https://github.com/succinctlabs/sp1?branch=experimental#0560027894de878fae1259d7dbe8d76f5310d2c6"
 dependencies = [
  "anyhow",
  "bincode",
@@ -763,7 +792,8 @@ dependencies = [
 
 [[package]]
 name = "sp1-zkvm"
-version = "1.0.1"
+version = "1.1.1"
+source = "git+https://github.com/succinctlabs/sp1?branch=experimental#0560027894de878fae1259d7dbe8d76f5310d2c6"
 dependencies = [
  "bincode",
  "cfg-if",
@@ -776,6 +806,12 @@ dependencies = [
  "sha2",
  "sp1-lib",
 ]
+
+[[package]]
+name = "spin"
+version = "0.9.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
 
 [[package]]
 name = "strum"
@@ -793,6 +829,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "substrate-bn"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "72b5bbfa79abbae15dd642ea8176a21a635ff3c00059961d1ea27ad04e5b441c"
+dependencies = [
+ "byteorder",
+ "crunchy",
+ "lazy_static",
+ "rand",
+ "rustc-hex",
 ]
 
 [[package]]
@@ -944,13 +993,18 @@ dependencies = [
 name = "zkvm-pairings"
 version = "0.1.0"
 dependencies = [
+ "byteorder",
  "cfg-if",
+ "crunchy",
  "ff",
+ "hex",
  "num-bigint",
  "rand",
  "rand_core",
  "rang",
  "sp1-derive",
+ "sp1-lib",
  "sp1-zkvm",
+ "substrate-bn",
  "subtle",
 ]
