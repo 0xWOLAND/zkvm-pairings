@@ -427,8 +427,8 @@ impl Neg for Bls12381 {
         const LIMBS: usize = <Bls12381 as FpElement>::LIMBS;
 
         unsafe {
-            let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
-            let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(Self::MODULUS);
+            let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(Self::MODULUS);
+            let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
             syscall_bls12381_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
             Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(lhs))
         }
@@ -799,8 +799,8 @@ impl Neg for Bn254 {
         const LIMBS: usize = <Bn254 as FpElement>::LIMBS;
 
         unsafe {
-            let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
-            let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(Self::MODULUS);
+            let mut lhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(Self::MODULUS);
+            let rhs = transmute::<[u64; LIMBS], [u32; 2 * LIMBS]>(self.0);
             syscall_bn254_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
             Self::from_raw_unchecked(transmute::<[u32; 2 * LIMBS], [u64; LIMBS]>(lhs))
         }
