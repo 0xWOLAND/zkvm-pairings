@@ -10,7 +10,10 @@ use num_bigint::BigUint;
 use rand::RngCore;
 
 #[cfg(target_os = "zkvm")]
-use sp1_lib::{io, unconstrained};
+use sp1_lib::{
+    io::{self, hint_slice},
+    unconstrained,
+};
 
 pub trait Fp12Element: Fp6Element {
     type Fp12ElementType;
@@ -223,8 +226,7 @@ impl Fp12Element for Bls12381 {
                 }
                 None => {}
             }
-
-            io::write(io::FD_HINT, &buf);
+            hint_slice(&buf);
         }
 
         let bytes: [u8; 577] = io::read_vec().try_into().unwrap();
@@ -327,8 +329,7 @@ impl Fp12Element for Bn254 {
                 }
                 None => {}
             }
-
-            io::write(io::FD_HINT, &buf);
+            hint_slice(&buf);
         }
 
         let bytes: [u8; 513] = io::read_vec().try_into().unwrap();

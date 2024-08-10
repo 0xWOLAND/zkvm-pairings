@@ -228,7 +228,7 @@ impl<F: G1Element> G1Affine<F> {
         F::generator()
     }
 
-    fn random(mut rng: impl rand::Rng) -> Self {
+    pub fn random(mut rng: impl rand::Rng) -> Self {
         let b = F::from(F::B);
         loop {
             let x = F::random(&mut rng);

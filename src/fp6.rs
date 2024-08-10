@@ -6,7 +6,10 @@ use core::ops::{Add, Div, Mul, Neg, Sub};
 
 use rand::RngCore;
 #[cfg(target_os = "zkvm")]
-use sp1_lib::{io, unconstrained};
+use sp1_lib::{
+    io::{self, hint_slice},
+    unconstrained,
+};
 
 pub trait Fp6Element: Fp2Element {
     fn from_bytes_slice(bytes: &[u8]) -> Fp6<Self>;
@@ -144,8 +147,7 @@ impl Fp6Element for Bls12381 {
                 }
                 None => {}
             }
-
-            io::write(io::FD_HINT, &buf);
+            hint_slice(&buf)
         }
 
         let bytes: [u8; 289] = io::read_vec().try_into().unwrap();
@@ -253,8 +255,7 @@ impl Fp6Element for Bn254 {
                 }
                 None => {}
             }
-
-            io::write(io::FD_HINT, &buf);
+            hint_slice(&buf);
         }
 
         let bytes: [u8; 257] = io::read_vec().try_into().unwrap();

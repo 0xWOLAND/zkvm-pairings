@@ -1,4 +1,3 @@
-use crate::g1::G1Element;
 use crate::utils::*;
 use core::fmt;
 use core::mem::transmute;
@@ -10,7 +9,10 @@ use std::str::FromStr;
 
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
-        use sp1_lib::{syscall_bls12381_fp_mulmod, syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod, syscall_bn254_fp_addmod, syscall_bn254_fp_submod, syscall_bn254_fp_mulmod, unconstrained, io};
+        use sp1_lib::{
+            io::{self, hint_slice}, syscall_bls12381_fp_addmod, syscall_bls12381_fp_mulmod, syscall_bls12381_fp_submod,
+            syscall_bn254_fp_addmod, syscall_bn254_fp_mulmod, syscall_bn254_fp_submod, unconstrained,
+        };
     }
 }
 
@@ -77,7 +79,7 @@ impl Bls12381 {
         0x1a01_11ea_397f_e69a,
     ];
 
-    pub(crate) const fn from_raw_unchecked(v: [u64; 6]) -> Self {
+    pub const fn from_raw_unchecked(v: [u64; 6]) -> Self {
         Bls12381(v)
     }
 
@@ -175,8 +177,9 @@ impl FpElement for Bls12381 {
         // Compute the square root using the zkvm syscall
         unconstrained! {
             let mut buf = [0u8; 48];
-            buf.copy_from_slice(&self._sqrt().to_bytes());
-            io::write(io::FD_HINT, &buf);
+            let sqrt = self._sqrt();
+            buf.copy_from_slice(&sqrt.to_bytes_unsafe());
+            hint_slice(&buf);
         }
 
         let byte_vec = io::read_vec();
@@ -207,16 +210,14 @@ impl FpElement for Bls12381 {
         // Compute the inverse using the zkvm syscall
         unconstrained! {
             let mut buf = [0u8; 48];
-            buf.copy_from_slice(&self._invert().to_bytes());
-            io::write(io::FD_HINT, &buf);
+            buf.copy_from_slice(&self._invert().to_bytes_unsafe());
+            hint_slice(&buf);
         }
 
         let byte_vec = io::read_vec();
         let bytes: [u8; 48] = byte_vec.try_into().unwrap();
-        unsafe {
-            let inv = Self::from_bytes_unsafe(&bytes);
-            Some(inv).filter(|_| !self.is_zero())
-        }
+        let inv = Self::from_bytes_unsafe(&bytes);
+        Some(inv).filter(|_| !self.is_zero())
     }
 
     fn random(mut rng: impl RngCore) -> Self {
@@ -560,7 +561,7 @@ impl FpElement for Bn254 {
         unconstrained! {
             let mut buf = [0u8; 32];
             buf.copy_from_slice(&self._sqrt().to_bytes());
-            io::write(io::FD_HINT, &buf);
+            hint_slice(&buf);
         }
 
         let byte_vec = io::read_vec();
@@ -588,16 +589,14 @@ impl FpElement for Bn254 {
         // Compute the inverse using the zkvm syscall
         unconstrained! {
             let mut buf = [0u8; 32];
-            buf.copy_from_slice(&self._invert().to_bytes());
-            io::write(io::FD_HINT, &buf);
+            buf.copy_from_slice(&self._invert().to_bytes_unsafe());
+            hint_slice(&buf);
         }
 
         let byte_vec = io::read_vec();
         let bytes: [u8; 32] = byte_vec.try_into().unwrap();
-        unsafe {
-            let inv = Self::from_bytes_unsafe(&bytes);
-            Some(inv).filter(|_| !self.is_zero() && *self * inv == Bn254::one())
-        }
+        let inv = Self::from_bytes_unsafe(&bytes);
+        Some(inv).filter(|_| !self.is_zero() && *self * inv == Bn254::one())
     }
 
     fn random(mut rng: impl RngCore) -> Self {

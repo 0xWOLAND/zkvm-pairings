@@ -9,7 +9,7 @@ cfg_if::cfg_if! {
         use sp1_lib::{
             syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_mulmod, syscall_bls12381_fp2_submod,
             syscall_bn254_fp2_addmod, syscall_bn254_fp2_mulmod, syscall_bn254_fp2_submod,
-            io, unconstrained
+            io::{self, hint_slice}, unconstrained
         };
         use std::mem::transmute;
     }
@@ -317,7 +317,7 @@ impl Fp2Element for Bn254 {
                 None => {}
             }
 
-            io::write(io::FD_HINT, &buf);
+
         }
 
         let bytes: [u8; 65] = io::read_vec().try_into().unwrap();
