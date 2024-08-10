@@ -12,3 +12,4 @@ pub mod g2;
 pub mod pairings;
 
 pub mod common;
+pub mod revm;

@@ -194,7 +194,7 @@ impl<F: G1Element> fmt::Display for G1Affine<F> {
 }
 
 impl<F: G1Element> G1Affine<F> {
-    fn new(x: F, y: F) -> Option<Self> {
+    pub fn new(x: F, y: F) -> Option<Self> {
         let p = G1Affine {
             x,
             y,
@@ -213,6 +213,14 @@ impl<F: G1Element> G1Affine<F> {
             x: F::zero(),
             y: F::one(),
             is_infinity: true,
+        }
+    }
+
+    pub fn zero() -> Self {
+        G1Affine {
+            x: F::zero(),
+            y: F::zero(),
+            is_infinity: false,
         }
     }
 

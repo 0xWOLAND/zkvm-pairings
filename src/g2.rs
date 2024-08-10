@@ -334,7 +334,7 @@ impl<F: G2Element> PartialEq for G2Affine<F> {
 impl<F: G2Element> Eq for G2Affine<F> {}
 
 impl<F: G2Element> G2Affine<F> {
-    fn new(x: Fp2<F>, y: Fp2<F>, is_infinity: bool) -> Option<Self> {
+    pub fn new(x: Fp2<F>, y: Fp2<F>, is_infinity: bool) -> Option<Self> {
         let p = G2Affine { x, y, is_infinity };
 
         F::is_valid(&p).map(|_| p).ok()
@@ -349,6 +349,14 @@ impl<F: G2Element> G2Affine<F> {
             x: Fp2::zero(),
             y: Fp2::one(),
             is_infinity: true,
+        }
+    }
+
+    pub fn zero() -> Self {
+        G2Affine {
+            x: Fp2::zero(),
+            y: Fp2::zero(),
+            is_infinity: false,
         }
     }
 

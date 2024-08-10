@@ -1,5 +1,6 @@
 use core::fmt;
 use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use num_bigint::BigUint;
 use rand_core::RngCore;
 use std::marker::PhantomData;
 use std::mem::transmute;
@@ -22,6 +23,8 @@ pub trait FrElement: FpElement {
     const FR_ROOT_OF_UNITY_INV: [u64; 4];
     const FR_DELTA: [u64; 4];
     const FR_MODULUS_STR: &'static str;
+
+    fn invert(f: &Fr<Self>) -> CtOption<Fr<Self>>;
 }
 
 impl FrElement for Bls12381 {
@@ -95,6 +98,103 @@ impl FrElement for Bls12381 {
 
     const FR_MODULUS_STR: &'static str =
         "0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
+
+    fn invert(f: &Fr<Self>) -> CtOption<Fr<Self>> {
+        #[inline(always)]
+        fn square_assign_multi<F: FrElement>(n: &mut Fr<F>, num_times: usize) {
+            for _ in 0..num_times {
+                *n = n.square();
+            }
+        }
+        // found using https://github.com/kwantam/addchain
+        let mut t0 = f.square();
+        let mut t1 = t0 * *f;
+        let mut t16 = t0.square();
+        let mut t6 = t16.square();
+        let mut t5 = t6 * t0;
+        t0 = t6 * t16;
+        let mut t12 = t5 * t16;
+        let mut t2 = t6.square();
+        let mut t7 = t5 * t6;
+        let mut t15 = t0 * t5;
+        let mut t17 = t12.square();
+        t1 = t1 * t17;
+        let mut t3 = t7 * t2;
+        let t8 = t1 * t17;
+        let t4 = t8 * t2;
+        let t9 = t8 * t7;
+        t7 = t4 * t5;
+        let t11 = t4 * t17;
+        t5 = t9 * t17;
+        let t14 = t7 * t15;
+        let t13 = t11 * t12;
+        t12 = t11 * t17;
+        t15 = t15 * t12;
+        t16 = t16 * t15;
+        t3 = t3 * t16;
+        t17 = t17 * t3;
+        t0 = t0 * t17;
+        t6 = t6 * t0;
+        t2 = t2 * t6;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t17;
+        square_assign_multi(&mut t0, 9);
+        t0 = t0 * t16;
+        square_assign_multi(&mut t0, 9);
+        t0 = t0 * t15;
+        square_assign_multi(&mut t0, 9);
+        t0 = t0 * t15;
+        square_assign_multi(&mut t0, 7);
+        t0 = t0 * t14;
+        square_assign_multi(&mut t0, 7);
+        t0 = t0 * t13;
+        square_assign_multi(&mut t0, 10);
+        t0 = t0 * t12;
+        square_assign_multi(&mut t0, 9);
+        t0 = t0 * t11;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t8;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * *f;
+        square_assign_multi(&mut t0, 14);
+        t0 = t0 * t9;
+        square_assign_multi(&mut t0, 10);
+        t0 = t0 * t8;
+        square_assign_multi(&mut t0, 15);
+        t0 = t0 * t7;
+        square_assign_multi(&mut t0, 10);
+        t0 = t0 * t6;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t5;
+        square_assign_multi(&mut t0, 16);
+        t0 = t0 * t3;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t2;
+        square_assign_multi(&mut t0, 7);
+        t0 = t0 * t4;
+        square_assign_multi(&mut t0, 9);
+        t0 = t0 * t2;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t3;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t2;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t2;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t2;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t3;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t2;
+        square_assign_multi(&mut t0, 8);
+        t0 = t0 * t2;
+        square_assign_multi(&mut t0, 5);
+        t0 = t0 * t1;
+        square_assign_multi(&mut t0, 5);
+        t0 = t0 * t1;
+
+        CtOption::new(t0, !f.ct_eq(&Fr::<Bls12381>::zero()))
+    }
 }
 
 impl FrElement for Bn254 {
@@ -148,6 +248,26 @@ impl FrElement for Bn254 {
 
     const FR_MODULUS_STR: &'static str =
         "0x43e1f593f00000012833e84879b97091b85045b68181585d30644e72e131a029";
+
+    fn invert(f: &Fr<Self>) -> CtOption<Fr<Self>> {
+        if f.ct_eq(&Fr::<Bn254>::zero()).into() {
+            return CtOption::new(Fr::<Bn254>::zero(), Choice::from(0));
+        }
+
+        unsafe {
+            let modulus = BigUint::from_slice(&transmute::<[u64; 4], [u32; 8]>(Bn254::FR_MODULUS));
+
+            let a = BigUint::from_bytes_le(&f.to_bytes());
+            let inv = a.modinv(&modulus).unwrap();
+            let mut bytes = inv.to_bytes_le();
+            bytes.resize(32, 0);
+
+            CtOption::new(
+                Fr::from_bytes(&bytes.try_into().unwrap()).unwrap(),
+                !f.ct_eq(&Fr::<Bn254>::zero()),
+            )
+        }
+    }
 }
 
 /// Represents an element of the scalar field $\mathbb{F}_q$ of the BLS12-381 elliptic
@@ -162,7 +282,7 @@ impl<F: FrElement> fmt::Debug for Fr<F> {
         let tmp = self.to_bytes();
         write!(f, "0x")?;
         for &b in tmp.iter().rev() {
-            write!(f, "{:02x}", b)?;
+            write!(f, "{:0}", b)?;
         }
         Ok(())
     }
@@ -240,16 +360,21 @@ impl<F: FrElement> Neg for Fr<F> {
 impl<F: FrElement> Add<Fr<F>> for Fr<F> {
     type Output = Fr<F>;
 
-    // #[inline]
+    #[inline]
     fn add(self, rhs: Fr<F>) -> Fr<F> {
-        let (d0, carry) = adc(self.0[0], rhs.0[0], 0);
-        let (d1, carry) = adc(self.0[1], rhs.0[1], carry);
-        let (d2, carry) = adc(self.0[2], rhs.0[2], carry);
-        let (d3, _) = adc(self.0[3], rhs.0[3], carry);
+        unsafe {
+            let lhs = BigUint::from_bytes_le(&self.to_bytes());
+            let rhs = BigUint::from_bytes_le(&rhs.to_bytes());
+            let modulus = transmute::<[u64; 4], [u32; 8]>(F::FR_MODULUS);
 
-        // Attempt to subtract the modulus, to ensure the value
-        // is smaller than the modulus.
-        (&Fr::from_raw_unchecked([d0, d1, d2, d3])).sub(Fr::from_raw_unchecked(F::FR_MODULUS))
+            let sum = (lhs + rhs) % BigUint::from_slice(&modulus);
+
+            let mut sum_slice = sum.to_u32_digits();
+            sum_slice.resize(8, 0);
+            Self::from_raw_unchecked(transmute::<[u32; 8], [u64; 4]>(
+                sum_slice.try_into().unwrap(),
+            ))
+        }
     }
 }
 
@@ -258,19 +383,7 @@ impl<F: FrElement> Sub<Fr<F>> for Fr<F> {
 
     #[inline]
     fn sub(self, rhs: Fr<F>) -> Fr<F> {
-        let (d0, borrow) = sbb(self.0[0], rhs.0[0], 0);
-        let (d1, borrow) = sbb(self.0[1], rhs.0[1], borrow);
-        let (d2, borrow) = sbb(self.0[2], rhs.0[2], borrow);
-        let (d3, borrow) = sbb(self.0[3], rhs.0[3], borrow);
-
-        // If underflow occurred on the final limb, borrow = 0xfff...fff, otherwise
-        // borrow = 0x000...000. Thus, we use it as a mask to conditionally add the modulus.
-        let (d0, carry) = adc(d0, F::FR_MODULUS[0] & borrow, 0);
-        let (d1, carry) = adc(d1, F::FR_MODULUS[1] & borrow, carry);
-        let (d2, carry) = adc(d2, F::FR_MODULUS[2] & borrow, carry);
-        let (d3, _) = adc(d3, F::FR_MODULUS[3] & borrow, carry);
-
-        Fr::from_raw_unchecked([d0, d1, d2, d3])
+        self + (-rhs)
     }
 }
 
@@ -502,100 +615,7 @@ impl<F: FrElement> Fr<F> {
     /// Computes the multiplicative inverse of this element,
     /// failing if the element is zero.
     pub fn invert(&self) -> CtOption<Self> {
-        #[inline(always)]
-        fn square_assign_multi<F: FrElement>(n: &mut Fr<F>, num_times: usize) {
-            for _ in 0..num_times {
-                *n = n.square();
-            }
-        }
-        // found using https://github.com/kwantam/addchain
-        let mut t0 = self.square();
-        let mut t1 = t0 * *self;
-        let mut t16 = t0.square();
-        let mut t6 = t16.square();
-        let mut t5 = t6 * t0;
-        t0 = t6 * t16;
-        let mut t12 = t5 * t16;
-        let mut t2 = t6.square();
-        let mut t7 = t5 * t6;
-        let mut t15 = t0 * t5;
-        let mut t17 = t12.square();
-        t1 = t1 * t17;
-        let mut t3 = t7 * t2;
-        let t8 = t1 * t17;
-        let t4 = t8 * t2;
-        let t9 = t8 * t7;
-        t7 = t4 * t5;
-        let t11 = t4 * t17;
-        t5 = t9 * t17;
-        let t14 = t7 * t15;
-        let t13 = t11 * t12;
-        t12 = t11 * t17;
-        t15 = t15 * t12;
-        t16 = t16 * t15;
-        t3 = t3 * t16;
-        t17 = t17 * t3;
-        t0 = t0 * t17;
-        t6 = t6 * t0;
-        t2 = t2 * t6;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t17;
-        square_assign_multi(&mut t0, 9);
-        t0 = t0 * t16;
-        square_assign_multi(&mut t0, 9);
-        t0 = t0 * t15;
-        square_assign_multi(&mut t0, 9);
-        t0 = t0 * t15;
-        square_assign_multi(&mut t0, 7);
-        t0 = t0 * t14;
-        square_assign_multi(&mut t0, 7);
-        t0 = t0 * t13;
-        square_assign_multi(&mut t0, 10);
-        t0 = t0 * t12;
-        square_assign_multi(&mut t0, 9);
-        t0 = t0 * t11;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t8;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * *self;
-        square_assign_multi(&mut t0, 14);
-        t0 = t0 * t9;
-        square_assign_multi(&mut t0, 10);
-        t0 = t0 * t8;
-        square_assign_multi(&mut t0, 15);
-        t0 = t0 * t7;
-        square_assign_multi(&mut t0, 10);
-        t0 = t0 * t6;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t5;
-        square_assign_multi(&mut t0, 16);
-        t0 = t0 * t3;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t2;
-        square_assign_multi(&mut t0, 7);
-        t0 = t0 * t4;
-        square_assign_multi(&mut t0, 9);
-        t0 = t0 * t2;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t3;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t2;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t2;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t2;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t3;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t2;
-        square_assign_multi(&mut t0, 8);
-        t0 = t0 * t2;
-        square_assign_multi(&mut t0, 5);
-        t0 = t0 * t1;
-        square_assign_multi(&mut t0, 5);
-        t0 = t0 * t1;
-
-        CtOption::new(t0, !self.ct_eq(&Self::zero()))
+        <F as FrElement>::invert(self)
     }
 }
 
@@ -948,6 +968,16 @@ mod fr_tests {
             let a = fr_bn_rand();
             let b = fr_bn_rand();
             assert_eq!(a / b, a * b.invert().unwrap());
+        }
+    }
+
+    #[test]
+    fn test_to_from_bytes() {
+        for _ in 0..10 {
+            let a = fr_bn_rand();
+            let bytes = a.to_bytes();
+            let b = Fr::<Bn254>::from_bytes(&bytes).unwrap();
+            assert_eq!(a, b);
         }
     }
 

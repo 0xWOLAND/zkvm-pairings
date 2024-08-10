@@ -253,7 +253,7 @@ impl Fp2Element for Bn254 {
 
         let a = &BigUint::from_bytes_be(bytes);
         println!("a: {:?}", a);
-        let modulus = &BigUint::from_str(&Bn254::modulus()).unwrap();
+        let modulus = &Bn254::modulus();
 
         let c0 = a % modulus;
         let c1 = a / modulus;
@@ -863,7 +863,7 @@ mod bls12_381_tests {
 
     #[test]
     fn test_lexicographic_largest() {
-        let modulus = BigUint::from_str(Bls12381::modulus().as_str()).unwrap();
+        let modulus = Bls12381::modulus();
 
         let gen_test_value = || {
             let mut rng = rand::thread_rng();
@@ -902,6 +902,201 @@ mod bls12_381_tests {
 }
 
 #[cfg(test)]
+mod bn254_tests {
+    use super::*;
+    use num_bigint::BigUint;
+    use rand::Rng;
+    use std::str::FromStr;
+
+    fn rand_bn254() -> Fp2<Bn254> {
+        Fp2::random(&mut rand::thread_rng())
+    }
+
+    #[test]
+    fn test_inequality() {
+        for _ in 0..10 {
+            let a = rand_bn254();
+            let b = rand_bn254();
+            if a != b {
+                assert_ne!(a, b);
+            }
+        }
+    }
+
+    #[test]
+    fn test_addition_subtraction() {
+        for _ in 0..10 {
+            let a = rand_bn254();
+            let b = rand_bn254();
+            let c = rand_bn254();
+
+            // commutative
+            assert_eq!(a + b, b + a);
+            assert_eq!(a + (b + c), (a + b) + c);
+
+            // additive identity
+            assert_eq!(a + Fp2::<Bn254>::zero(), a);
+            assert_eq!(a - Fp2::<Bn254>::zero(), a);
+
+            assert_eq!(Fp2::<Bn254>::zero() - a, -a);
+            assert_eq!(a - b, a + (-b));
+            assert_eq!(a - b, a + (b * -Fp2::<Bn254>::one()));
+
+            assert_eq!(-a, Fp2::<Bn254>::zero() - a);
+            assert_eq!(-a, a * -Fp2::<Bn254>::one());
+        }
+    }
+
+    #[test]
+    fn test_multiplication() {
+        for _ in 0..10 {
+            let a = rand_bn254();
+            let b = rand_bn254();
+            let c = rand_bn254();
+
+            // commutative
+            assert_eq!(a * b, b * a);
+
+            // associative
+            assert_eq!(a * (b * c), (a * b) * c);
+
+            // distributive
+            assert_eq!(a * (b + c), a * b + a * c);
+
+            assert_eq!(a * Fp2::<Bn254>::zero(), Fp2::<Bn254>::zero());
+
+            assert_eq!(a * Fp2::<Bn254>::one(), a);
+        }
+    }
+
+    #[test]
+    fn test_add_equality() {
+        for _ in 0..10 {
+            let a = rand_bn254();
+
+            assert_eq!(a * Bn254::zero(), Fp2::<Bn254>::zero());
+            assert_eq!(a * Fp2::<Bn254>::zero(), Fp2::<Bn254>::zero());
+            assert_eq!(a * Fp2::<Bn254>::one(), a);
+            assert_eq!(a * Bn254::one(), a);
+            assert_eq!(a * Bn254::from(2u64), a + a);
+            assert_eq!(a * Bn254::from(3u64), a + a + a);
+            assert_eq!(a * Bn254::from(4u64), a + a + a + a);
+        }
+    }
+
+    #[test]
+    fn test_square_equality() {
+        for _ in 0..10 {
+            let a = rand_bn254();
+            assert_eq!(a.square(), a * a);
+        }
+    }
+
+    #[test]
+    fn test_pow_equality() {
+        for _ in 0..10 {
+            let a = rand_bn254();
+            assert_eq!(a.pow_vartime(&[1, 0, 0, 0, 0, 0]), a);
+            assert_eq!(a.pow_vartime(&[2, 0, 0, 0, 0, 0]), a.square());
+            assert_eq!(a.pow_vartime(&[3, 0, 0, 0, 0, 0]), a.square() * a);
+            assert_eq!(a.pow_vartime(&[4, 0, 0, 0, 0, 0]), a.square().square());
+        }
+    }
+
+    #[test]
+    fn test_sqrt() {
+        for _ in 0..10 {
+            let a = rand_bn254();
+            let a_sq = a.square();
+            let a_sqrt = a_sq.sqrt();
+            if a_sqrt.is_some().into() {
+                assert_eq!(a_sqrt.unwrap().square(), a_sq);
+            }
+        }
+    }
+
+    #[test]
+    fn test_div() {
+        for _ in 0..10 {
+            let a = rand_bn254();
+            let b = rand_bn254();
+            let c = rand_bn254();
+
+            println!("one: {:?}", Fp2::<Bn254>::one());
+            println!("invert(one): {:?}", Fp2::<Bn254>::one().invert().unwrap());
+
+            // division by one
+            println!("a: {:?}", a);
+            println!("a / one: {:?}", a * Fp2::<Bn254>::one());
+
+            assert_eq!(a / Fp2::<Bn254>::one(), a);
+            assert_eq!(a / a, Fp2::<Bn254>::one());
+
+            // division by zero
+            assert_eq!(Fp2::<Bn254>::zero() / a, Fp2::<Bn254>::zero());
+
+            // division distributivity
+            assert_eq!((a + b) / c, a / c + b / c);
+
+            // division and multiplication equality
+            if !b.is_zero() {
+                assert_eq!(a / b, a * b.invert().unwrap());
+            }
+        }
+    }
+
+    #[test]
+    fn test_inversion() {
+        for _ in 0..10 {
+            let a = rand_bn254();
+            if !a.is_zero() {
+                assert_eq!(a * a.invert().unwrap(), Fp2::<Bn254>::one());
+                assert_eq!(a.invert().unwrap().invert().unwrap(), a);
+            }
+        }
+    }
+
+    #[test]
+    fn test_lexicographic_largest() {
+        let modulus = Bn254::modulus();
+
+        let gen_test_value = || {
+            let mut rng = rand::thread_rng();
+            let a: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
+            let a = BigUint::from_bytes_le(a.as_slice()) % &modulus;
+            let a_inv = &modulus - &a;
+            let mut a_bytes = a.to_bytes_le();
+            a_bytes.resize(32, 0);
+
+            let a_fp = Bn254::from_bytes_unsafe(&a_bytes.try_into().unwrap());
+            (a, a_inv, a_fp)
+        };
+
+        for _ in 0..100 {
+            let (a, a_inv, a_fp) = gen_test_value();
+            let (b, b_inv, b_fp) = gen_test_value();
+
+            let lhs = Fp2::new(a_fp, b_fp).is_lexicographically_largest();
+            let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
+
+            assert_eq!(lhs, rhs);
+        }
+
+        for _ in 0..100 {
+            let (a, a_inv, a_fp) = gen_test_value();
+            let b = BigUint::ZERO;
+            let b_inv = BigUint::ZERO;
+            let b_fp = Bn254::zero();
+
+            let lhs = Fp2::new(a_fp, b_fp).is_lexicographically_largest();
+            let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
+
+            assert_eq!(lhs, rhs);
+        }
+    }
+}
+
+#[cfg(test)]
 mod substrate_bn_tests {
     use substrate_bn::Fq2;
 
@@ -926,6 +1121,8 @@ mod substrate_bn_tests {
         let mut slice = [0u8; 64];
         f.real().to_big_endian(slice[0..32].as_mut()).unwrap();
         f.imaginary().to_big_endian(slice[32..].as_mut()).unwrap();
+
+        println!("slice: {:?}", slice);
 
         slice
     }

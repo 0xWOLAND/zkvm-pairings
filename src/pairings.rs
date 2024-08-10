@@ -176,10 +176,7 @@ impl<F: Fp12Element + G2Element> From<G2Affine<F>> for G2Prepared<F> {
     }
 }
 
-fn multi_miller_loop<F: Fp12Element + G1Element>(
-    p: &[G1Affine<F>],
-    q: &[G2Prepared<F>],
-) -> Fp12<F> {
+fn multi_miller_loop<F: Fp12Element + G1Element>(p: &[(G1Affine<F>, G2Prepared<F>)]) -> Fp12<F> {
     let mut f = Fp12::<F>::one();
     let mut found_one = false;
     let mut j = 0;
@@ -189,7 +186,8 @@ fn multi_miller_loop<F: Fp12Element + G1Element>(
             found_one = i;
             continue;
         }
-        p.iter().zip(q.iter()).for_each(|(a, b)| {
+        // p.iter().zip(q.iter()).for_each(|(a, b)| {
+        p.iter().for_each(|(a, b)| {
             if !(a.is_identity() || b.is_infinity) {
                 f = ell(f, &b.coeffs[j], a);
             }
@@ -197,7 +195,8 @@ fn multi_miller_loop<F: Fp12Element + G1Element>(
         j += 1;
 
         if i {
-            p.iter().zip(q.iter()).for_each(|(a, b)| {
+            // p.iter().zip(q.iter()).for_each(|(a, b)| {
+            p.iter().for_each(|(a, b)| {
                 (!(a.is_identity() || b.is_infinity)).then(|| {
                     f = ell(f, &b.coeffs[j], a);
                 });
@@ -207,7 +206,8 @@ fn multi_miller_loop<F: Fp12Element + G1Element>(
         f = f.square();
     }
 
-    p.iter().zip(q.iter()).for_each(|(a, b)| {
+    // p.iter().zip(q.iter()).for_each(|(a, b)| {
+    p.iter().for_each(|(a, b)| {
         (!(a.is_identity() || b.is_infinity)).then(|| {
             f = ell(f, &b.coeffs[j], a);
         });
@@ -336,13 +336,13 @@ pub fn final_exponentiation<F: Fp12Element + AffinePoint>(&f: &Fp12<F>) -> Fp12<
 }
 
 pub fn verify_pairing<F: Fp12Element + G1Element + G2Element>(
-    p: &[G1Affine<F>],
-    q: &[G2Affine<F>],
+    p: &[(G1Affine<F>, G2Affine<F>)],
 ) -> bool {
-    let q = q
+    let q = p
         .iter()
-        .map(|q| G2Prepared::from(*q))
-        .collect::<Vec<G2Prepared<F>>>();
-    let f = multi_miller_loop(p, &q);
+        .map(|&(px, qx)| (px, G2Prepared::from(qx)))
+        .collect::<Vec<(G1Affine<F>, G2Prepared<F>)>>();
+
+    let f = multi_miller_loop(&q);
     final_exponentiation(&f) == Fp12::<F>::one()
 }

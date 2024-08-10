@@ -2,7 +2,6 @@ use crate::utils::*;
 use core::fmt;
 use core::mem::transmute;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
-use num_bigint::BigUint;
 use rand::RngCore;
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -14,6 +13,18 @@ cfg_if::cfg_if! {
             syscall_bn254_fp_addmod, syscall_bn254_fp_mulmod, syscall_bn254_fp_submod, unconstrained,
         };
     }
+    else if #[cfg(not(target_os = "zkvm"))] {
+        use num_bigint::BigUint;
+    }
+}
+
+pub struct Field<P, const NUM_LIMBS: usize> {
+    elements: [u32; NUM_LIMBS],
+    _marker: std::marker::PhantomData<P>,
+}
+
+pub trait FieldOperations<const NUM_LIMBS: usize> {
+    fn add(res: &mut [u32; NUM_LIMBS], lhs: &[u32; NUM_LIMBS], rhs: &[u32; NUM_LIMBS]);
 }
 
 #[derive(Clone, Copy)]
@@ -49,7 +60,7 @@ pub trait FpElement:
     const LIMBS: usize;
     fn zero() -> Self;
     fn one() -> Self;
-    fn modulus() -> String;
+    fn modulus() -> BigUint;
     fn is_zero(&self) -> bool {
         self == &Self::zero()
     }
@@ -152,8 +163,8 @@ impl FpElement for Bls12381 {
         Self([1, 0, 0, 0, 0, 0])
     }
 
-    fn modulus() -> String {
-        "4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787".to_string()
+    fn modulus() -> BigUint {
+        BigUint::from_str("4002409555221667393417789825735904156556882819939007885332058136124031650490837864442687629129015664037894272559787").unwrap()
     }
 
     fn _sqrt(&self) -> Self {
@@ -263,15 +274,13 @@ impl<'a> Add<&'a Bls12381> for Bls12381 {
 
     #[cfg(not(target_os = "zkvm"))]
     fn add(self, rhs: &'a Self) -> Self {
-        use num_bigint::BigUint;
-
         const LIMBS: usize = <Bls12381 as FpElement>::LIMBS;
 
         unsafe {
             let lhs = BigUint::from_bytes_le(&self.to_bytes_unsafe());
             let rhs = BigUint::from_bytes_le(&rhs.to_bytes_unsafe());
 
-            let sum = (lhs + rhs) % BigUint::from_str(&<Bls12381 as FpElement>::modulus()).unwrap();
+            let sum = (lhs + rhs) % <Bls12381 as FpElement>::modulus();
 
             let mut sum_slice = sum.to_u32_digits();
             sum_slice.resize(2 * LIMBS, 0);
@@ -334,8 +343,6 @@ impl Mul for Bls12381 {
 
     #[cfg(not(target_os = "zkvm"))]
     fn mul(self, rhs: Self) -> Self {
-        use num_bigint::BigUint;
-
         const LIMBS: usize = <Bls12381 as FpElement>::LIMBS;
 
         unsafe {
@@ -344,8 +351,7 @@ impl Mul for Bls12381 {
             let slice_rhs = transmute::<&[u64; LIMBS], &[u32; 2 * LIMBS]>(&rhs.0);
             let rhs = BigUint::from_slice(slice_rhs);
 
-            let prod =
-                (lhs * rhs) % BigUint::from_str(&<Bls12381 as FpElement>::modulus()).unwrap();
+            let prod = (lhs * rhs) % <Bls12381 as FpElement>::modulus();
 
             let mut prod_slice = prod.to_u32_digits();
             prod_slice.resize(2 * LIMBS, 0);
@@ -537,8 +543,11 @@ impl FpElement for Bn254 {
         Self([1, 0, 0, 0])
     }
 
-    fn modulus() -> String {
-        "21888242871839275222246405745257275088696311157297823662689037894645226208583".to_string()
+    fn modulus() -> BigUint {
+        BigUint::from_str(
+            "21888242871839275222246405745257275088696311157297823662689037894645226208583",
+        )
+        .unwrap()
     }
 
     fn _sqrt(&self) -> Self {
@@ -644,15 +653,13 @@ impl<'a> Add<&'a Bn254> for Bn254 {
 
     #[cfg(not(target_os = "zkvm"))]
     fn add(self, rhs: &'a Self) -> Self {
-        use num_bigint::BigUint;
-
         const LIMBS: usize = <Bn254 as FpElement>::LIMBS;
 
         unsafe {
             let lhs = BigUint::from_bytes_le(&self.to_bytes_unsafe());
             let rhs = BigUint::from_bytes_le(&rhs.to_bytes_unsafe());
 
-            let sum = (lhs + rhs) % BigUint::from_str(&<Bn254 as FpElement>::modulus()).unwrap();
+            let sum = (lhs + rhs) % <Bn254 as FpElement>::modulus();
 
             let mut sum_slice = sum.to_u32_digits();
             sum_slice.resize(2 * LIMBS, 0);
@@ -717,8 +724,6 @@ impl Mul for Bn254 {
 
     #[cfg(not(target_os = "zkvm"))]
     fn mul(self, rhs: Self) -> Self {
-        use num_bigint::BigUint;
-
         const LIMBS: usize = <Bn254 as FpElement>::LIMBS;
 
         unsafe {
@@ -727,7 +732,7 @@ impl Mul for Bn254 {
             let slice_rhs = transmute::<&[u64; LIMBS], &[u32; 2 * LIMBS]>(&rhs.0);
             let rhs = BigUint::from_slice(slice_rhs);
 
-            let prod = (lhs * rhs) % BigUint::from_str(&<Bn254 as FpElement>::modulus()).unwrap();
+            let prod = (lhs * rhs) % <Bn254 as FpElement>::modulus();
 
             let mut prod_slice = prod.to_u32_digits();
             prod_slice.resize(2 * LIMBS, 0);
