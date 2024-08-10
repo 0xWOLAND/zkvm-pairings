@@ -78,24 +78,21 @@ pub fn read_point(input: &[u8]) -> Result<G1Affine<Bn254>, String> {
     G1Affine::<Bn254>::new(px, py).ok_or("Point is not on the curve".to_string())
 }
 
-pub fn run_add(input: &[u8], gas_cost: u64, gas_limit: u64) -> Vec<u8> {
+pub fn run_add(input: &[u8]) -> Vec<u8> {
     let input = right_pad::<ADD_INPUT_LEN>(input);
     let p1 = read_point(&input[..64]).expect("Failed to read point 1");
     let p2 = read_point(&input[64..]).expect("Failed to read point 2");
 
-    let mut output = [0u8; 64];
     let sum = p1 + p2;
-
     let mut bytes = [0u8; 64];
+
     bytes[..32].copy_from_slice(&sum.x.to_bytes());
     bytes[32..].copy_from_slice(&sum.y.to_bytes());
 
     bytes.to_vec()
 }
 
-pub fn run_mul(input: &[u8], gas_cost: u64, gas_limit: u64) -> Vec<u8> {
-    assert!(gas_cost <= gas_limit, "Gas cost exceeds gas limit");
-
+pub fn run_mul(input: &[u8]) -> Vec<u8> {
     let input = right_pad::<MUL_INPUT_LEN>(input);
     let p = read_point(&input[..64]).unwrap();
     let fr = Fr::<Bn254>::from_bytes(&input[64..96].try_into().unwrap()).unwrap();
