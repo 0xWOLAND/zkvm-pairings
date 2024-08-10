@@ -17,3 +17,4 @@ sp1-zkvm = { git = "https://github.com/succinctlabs/sp1", branch = "experimental
 substrate-bn = "0.6.0"
 crunchy = "0.2.2"
 byteorder = "1.5.0"
+hex = "0.4.3"

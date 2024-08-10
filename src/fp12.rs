@@ -19,7 +19,7 @@ pub trait Fp12Element: Fp6Element {
     type Fp12ElementType;
     fn from_bytes_slice(bytes: &[u8]) -> Self::Fp12ElementType;
     fn to_bytes_vec(value: &Self::Fp12ElementType) -> Vec<u8>;
-    fn get_fp12_frobenius_coeffs(pow: usize) -> [Self; 2];
+    fn get_fp12_frobenius_coeffs(pow: usize) -> (Self, Self);
     fn _invert(f: &Fp12<Self>) -> Option<Fp12<Self>> {
         (f.c0.square() - f.c1.square().mul_by_nonresidue())
             .invert()
@@ -30,10 +30,10 @@ pub trait Fp12Element: Fp6Element {
 
 impl Fp12Element for Bls12381 {
     type Fp12ElementType = Fp12<Bls12381>;
-    fn get_fp12_frobenius_coeffs(pow: usize) -> [Self; 2] {
+    fn get_fp12_frobenius_coeffs(pow: usize) -> (Self, Self) {
         match pow % 12 {
-            0 => [Self::one(); 2],
-            1 => [
+            0 => (Self::one(), Self::one()),
+            1 => (
                 Self::from_raw_unchecked([
                     0x8d0775ed92235fb8,
                     0xf67ea53d63e7813d,
@@ -50,8 +50,8 @@ impl Fp12Element for Bls12381 {
                     0x88e9e902231f9fb8,
                     0x00fc3e2b36c4e032,
                 ]),
-            ],
-            2 => [
+            ),
+            2 => (
                 Self::zero(),
                 Self::from_raw_unchecked([
                     0x8bfd00000000aaac,
@@ -61,8 +61,8 @@ impl Fp12Element for Bls12381 {
                     0xec02408663d4de85,
                     0x1a0111ea397fe699,
                 ]),
-            ],
-            3 => [
+            ),
+            3 => (
                 Self::from_raw_unchecked([
                     0xc81084fbede3cc09,
                     0xee67992f72ec05f4,
@@ -79,8 +79,8 @@ impl Fp12Element for Bls12381 {
                     0x6831e36d6bd17ffe,
                     0x06af0e0437ff400b,
                 ]),
-            ],
-            4 => [
+            ),
+            4 => (
                 Self::from_raw_unchecked([
                     0x8bfd00000000aaad,
                     0x409427eb4f49fffd,
@@ -90,8 +90,8 @@ impl Fp12Element for Bls12381 {
                     0x1a0111ea397fe699,
                 ]),
                 Self::zero(),
-            ],
-            5 => [
+            ),
+            5 => (
                 Self::from_raw_unchecked([
                     0x9b18fae980078116,
                     0xc63a3e6e257f8732,
@@ -108,8 +108,8 @@ impl Fp12Element for Bls12381 {
                     0x6bd3ad4afa99cc91,
                     0x144e4211384586c1,
                 ]),
-            ],
-            6 => [
+            ),
+            6 => (
                 Self::zero(),
                 Self::from_raw_unchecked([
                     0xb9feffffffffaaaa,
@@ -119,8 +119,8 @@ impl Fp12Element for Bls12381 {
                     0x4b1ba7b6434bacd7,
                     0x1a0111ea397fe69a,
                 ]),
-            ],
-            7 => [
+            ),
+            7 => (
                 Self::from_raw_unchecked([
                     0x2cf78a126ddc4af3,
                     0x282d5ac14d6c7ec2,
@@ -137,8 +137,8 @@ impl Fp12Element for Bls12381 {
                     0x88e9e902231f9fb8,
                     0x00fc3e2b36c4e032,
                 ]),
-            ],
-            8 => [
+            ),
+            8 => (
                 Self::from_raw_unchecked([
                     0x8bfd00000000aaac,
                     0x409427eb4f49fffd,
@@ -148,8 +148,8 @@ impl Fp12Element for Bls12381 {
                     0x1a0111ea397fe699,
                 ]),
                 Self::zero(),
-            ],
-            9 => [
+            ),
+            9 => (
                 Self::from_raw_unchecked([
                     0x8bfd00000000aaac,
                     0x409427eb4f49fffd,
@@ -159,8 +159,8 @@ impl Fp12Element for Bls12381 {
                     0x1a0111ea397fe699,
                 ]),
                 Self::zero(),
-            ],
-            10 => [
+            ),
+            10 => (
                 Self::from_raw_unchecked([
                     0xc81084fbede3cc09,
                     0xee67992f72ec05f4,
@@ -177,8 +177,8 @@ impl Fp12Element for Bls12381 {
                     0xe2e9c448d77a2cd9,
                     0x135203e60180a68e,
                 ]),
-            ],
-            11 => [
+            ),
+            11 => (
                 Self::zero(),
                 Self::from_raw_unchecked([
                     0x2e01fffffffefffe,
@@ -188,7 +188,7 @@ impl Fp12Element for Bls12381 {
                     0x5f19672fdf76ce51,
                     0x0000000000000000,
                 ]),
-            ],
+            ),
             _ => unimplemented!(),
         }
     }
@@ -240,58 +240,139 @@ impl Fp12Element for Bls12381 {
 
 impl Fp12Element for Bn254 {
     type Fp12ElementType = Fp12<Bn254>;
-    fn get_fp12_frobenius_coeffs(pow: usize) -> [Self; 2] {
+    fn get_fp12_frobenius_coeffs(pow: usize) -> (Self, Self) {
         match pow % 12 {
-            0 => [Self::one(); 2],
-            1 => [
+            0 => (Self::one(), Self::zero()),
+            1 => (
                 Self::from_raw_unchecked([
-                    0xd35d438dc58f0d9d,
-                    0x0a78eb28f5c70b3d,
-                    0x666ea36f7879462c,
-                    0x0e0a77c19a07df2f,
+                    0xd60b35dadcc9e470,
+                    0x5c521e08292f2176,
+                    0xe8b99fdd76e68b60,
+                    0x1284b71c2865a7df,
                 ]),
-                // Self::from_raw_unchecked([
-                //     11683091849979440498,
-                //     14992204589386555739,
-                //     15866167890766973222,
-                //     1200023580730561873,
-                // ]),
+                Self::from_raw_unchecked([
+                    0xca5cf05f80f362ac,
+                    0x747992778eeec7e5,
+                    0xa6327cfe12150b8e,
+                    0x246996f3b4fae7e6,
+                ]),
+            ),
+            2 => (
+                Self::from_raw_unchecked([
+                    0xe4bd44e5607cfd49,
+                    0xc28f069fbb966e3d,
+                    0x5e6dd9e7e0acccb0,
+                    0x30644e72e131a029,
+                ]),
                 Self::zero(),
-            ],
-            2 => [
+            ),
+            3 => (
                 Self::from_raw_unchecked([
-                    0xaf9ba69633144907,
-                    0xca6b1d7387afb78a,
-                    0x11bded5ef08a2087,
-                    0x02f34d751a1f3a7c,
+                    0xe86f7d391ed4a67f,
+                    0x894cb38dbe55d24a,
+                    0xefe9608cd0acaa90,
+                    0x19dc81cfcc82e4bb,
                 ]),
-                // Self::zero(),
                 Self::from_raw_unchecked([
-                    0xa222ae234c492d72,
-                    0xd00f02a4565de15b,
-                    0xdc2ff3a253dfc926,
-                    0x10a75716b3899551,
+                    0x7694aa2bf4c0c101,
+                    0x7f03a5e397d439ec,
+                    0x06cbeee33576139d,
+                    0xabf8b60be77d73,
                 ]),
-            ],
-            3 => [
+            ),
+            4 => (
                 Self::from_raw_unchecked([
-                    // 3914496794763385213,
-                    // 790120733010914719,
-                    // 7322192392869644725,
-                    // 581366264293887267,
-                    0xca8d800500fa1bf2,
-                    0xf0c5d61468b39769,
-                    0x0e201271ad0d4418,
-                    0x04290f65bad856e6,
+                    0xe4bd44e5607cfd48,
+                    0xc28f069fbb966e3d,
+                    0x5e6dd9e7e0acccb0,
+                    0x30644e72e131a029,
                 ]),
-                // Self::from_raw_unchecked([
-                //     12817045492518885689,
-                //     4440270538777280383,
-                //     11178533038884588256,
-                //     2767537931541304486,
-                // ]),
                 Self::zero(),
-            ],
+            ),
+            5 => (
+                Self::from_raw_unchecked([
+                    0x1264475e420ac20f,
+                    0x2cfa95859526b0d4,
+                    0x072fc0af59c61f30,
+                    0x757cab3a41d3cdc,
+                ]),
+                Self::from_raw_unchecked([
+                    0xe85845e34c4a5b9c,
+                    0xa20b7dfd71573c93,
+                    0x18e9b79ba4e2606c,
+                    0xca6b035381e35b6,
+                ]),
+            ),
+            6 => (
+                Self::from_raw_unchecked([
+                    0x3c208c16d87cfd46,
+                    0x97816a916871ca8d,
+                    0xb85045b68181585d,
+                    0x30644e72e131a029,
+                ]),
+                Self::zero(),
+            ),
+            7 => (
+                Self::from_raw_unchecked([
+                    0x6615563bfbb318d7,
+                    0x3b2f4c893f42a916,
+                    0xcf96a5d90a9accfd,
+                    0x1ddf9756b8cbf849,
+                ]),
+                Self::from_raw_unchecked([
+                    0x71c39bb757899a9b,
+                    0x2307d819d98302a7,
+                    0x121dc8b86f6c4ccf,
+                    0xbfab77f2c36b843,
+                ]),
+            ),
+            8 => (
+                Self::from_raw_unchecked([
+                    0x0,
+                    0x5763473177fffffe,
+                    0xd4f263f1acdb5c4f,
+                    0x59e26bcea0d48bac,
+                ]),
+                Self::zero(),
+            ),
+            9 => (
+                Self::from_raw_unchecked([
+                    0x53b10eddb9a856c8,
+                    0x0e34b703aa1bf842,
+                    0xc866e529b0d4adcd,
+                    0x1687cca314aebb6d,
+                ]),
+                Self::from_raw_unchecked([
+                    0xc58be1eae3bc3c46,
+                    0x187dc4add09d90a0,
+                    0xb18456d34c0b44c0,
+                    0x2fb855bcd54a22b6,
+                ]),
+            ),
+            10 => (
+                Self::from_raw_unchecked([
+                    0x0,
+                    0x5763473177ffffff,
+                    0xd4f263f1acdb5c4f,
+                    0x59e26bcea0d48bac,
+                ]),
+                Self::zero(),
+            ),
+            11 => (
+                Self::from_raw_unchecked([
+                    0x29bc44b896723b38,
+                    0x6a86d50bd34b19b9,
+                    0xb120850727bb392d,
+                    0x290c83bf3d14634d,
+                ]),
+                Self::from_raw_unchecked([
+                    0x53c846338c32a1ab,
+                    0xf575ec93f71a8df9,
+                    0x9f668e1adc9ef7f0,
+                    0x23bd9e3da9136a73,
+                ]),
+            ),
+
             _ => unimplemented!(),
         }
     }
@@ -577,7 +658,7 @@ impl<F: Fp12Element> Fp12<F> {
         let c1 = self.c1.frobenius_map();
 
         let frob_coeffs = F::get_fp12_frobenius_coeffs(1);
-        let c1 = c1 * Fp6::from(Fp2::new(frob_coeffs[0], frob_coeffs[1]));
+        let c1 = c1 * Fp6::from(Fp2::new(frob_coeffs.0, frob_coeffs.1));
 
         Fp12::new(c0, c1)
     }
@@ -920,13 +1001,29 @@ mod tests {
 
         #[test]
         fn test_frobenius() {
-            for _ in 0..10 {
-                let a = bn254_fp12_rand();
-                {
-                    let b = (0..12).fold(a, |acc, _| acc.frobenius_map());
-                    assert_eq!(a, b);
+            {
+                for _ in 0..10 {
+                    let a = bn254_fp12_rand();
+                    let lhs = a.frobenius_map();
+                    let rhs = (0..6).fold(a, |acc, _| acc.frobenius_map());
+                    assert_eq!(lhs, rhs);
                 }
             }
+            // {
+            //     for _ in 0..10 {
+            //         let a = bn254_fp12_rand();
+            //         // {
+            //         // let b = (0..12).fold(a, |acc, _| acc.frobenius_map());
+            //         // assert_eq!(a, b);
+            //         // }
+            //         let mut b = a;
+            //         for _ in 0..12 {
+            //             b = b.frobenius_map();
+            //             println!("b: {:?}", b);
+            //         }
+            //         assert_eq!(a, b);
+            //     }
+            // }
         }
 
         #[test]
@@ -943,10 +1040,10 @@ mod tests {
 
         #[test]
         fn test_bn254_frobenius() {
-            let mut init = bn254_fp12_rand();
             for _ in 0..12 {
-                println!("init: {:?}", init);
-                init = init.frobenius_map();
+                let lhs = bn254_fp12_rand();
+                let rhs = (0..12).fold(lhs, |acc, _| acc.frobenius_map());
+                assert_eq!(lhs, rhs);
             }
         }
 

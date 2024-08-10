@@ -162,27 +162,27 @@ impl Fp6Element for Bls12381 {
 impl Fp6Element for Bn254 {
     fn get_fp6_frobenius_coeff(pow: usize) -> (Self, Self) {
         match pow % 6 {
-            0 => (Self::one(), Self::one()),
+            0 => (Self::one(), Self::zero()),
             1 => (
                 Self::from_raw_unchecked([
-                    13075984984163199792,
-                    3782902503040509012,
-                    8791150885551868305,
-                    1825854335138010348,
+                    0x99e39557176f553d,
+                    0xb78cc310c2c3330c,
+                    0x4c0bec3cf559b143,
+                    0x2fb347984f7911f7,
                 ]),
                 Self::from_raw_unchecked([
-                    7963664994991228759,
-                    12257807996192067905,
-                    13179524609921305146,
-                    2767831111890561987,
+                    0x1665d51c640fcba2,
+                    0x32ae2a1d0b7c9dce,
+                    0x4ba4cc8bd75a0794,
+                    0x16c9e55061ebae20,
                 ]),
             ),
             2 => (
                 Self::from_raw_unchecked([
-                    3697675806616062876,
-                    9065277094688085689,
-                    6918009208039626314,
-                    2775033306905974752,
+                    0xe4bd44e5607cfd48,
+                    0xc28f069fbb966e3d,
+                    0x5e6dd9e7e0acccb0,
+                    0x30644e72e131a029,
                 ]),
                 Self::zero(),
             ),
@@ -404,6 +404,7 @@ impl<F: Fp6Element> Fp6<F> {
             c2: self.c1,
         }
     }
+
     /// Raises this element to p.
     #[inline(always)]
     pub fn frobenius_map(&self) -> Self {
@@ -423,21 +424,21 @@ impl<F: Fp6Element> Fp6<F> {
         Fp6 { c0, c1, c2 }
     }
 
-    // pub(crate) fn nth_frobenius_map(&self, pow: usize) -> Self {
-    //     let c0 = self.c0.frobenius_map();
-    //     let c1 = self.c1.frobenius_map();
-    //     let c2 = self.c2.frobenius_map();
+    pub(crate) fn nth_frobenius_map(&self, pow: usize) -> Self {
+        let c0 = self.c0.frobenius_map();
+        let c1 = self.c1.frobenius_map();
+        let c2 = self.c2.frobenius_map();
 
-    //     // c1 = c1 * (u + 1)^((p - 1) / 3)
-    //     let c1_coeffs = F::get_fp6_frobenius_coeff(pow);
-    //     let c1 = c1 * Fp2::new(c1_coeffs.0, c1_coeffs.1);
+        // c1 = c1 * (u + 1)^((p - 1) / 3)
+        let c1_coeffs = F::get_fp6_frobenius_coeff(pow);
+        let c1 = c1 * Fp2::new(c1_coeffs.0, c1_coeffs.1);
 
-    //     // c2 = c2 * (u + 1)^((2p - 2) / 3)
-    //     let c2_coeffs = F::get_fp6_frobenius_coeff(pow + 1);
-    //     let c2 = c2 * Fp2::new(c2_coeffs.0, c2_coeffs.1);
+        // c2 = c2 * (u + 1)^((2p - 2) / 3)
+        let c2_coeffs = F::get_fp6_frobenius_coeff(pow + 1);
+        let c2 = c2 * Fp2::new(c2_coeffs.0, c2_coeffs.1);
 
-    //     Fp6 { c0, c1, c2 }
-    // }
+        Fp6 { c0, c1, c2 }
+    }
 
     #[inline(always)]
     pub fn is_zero(&self) -> bool {
@@ -747,11 +748,22 @@ mod tests {
 
         #[test]
         fn test_frobenius() {
-            for _ in 0..10 {
-                let a = bls12381_fp6_rand();
-                let b = (0..6).fold(a, |acc, _| acc.frobenius_map());
-                assert_eq!(a, b);
+            {
+                for _ in 0..10 {
+                    let a = bls12381_fp6_rand();
+                    let lhs = a.frobenius_map().frobenius_map();
+                    let rhs = a.nth_frobenius_map(2);
+                    assert_eq!(lhs, rhs);
+                }
             }
+
+            // {
+            //     for _ in 0..10 {
+            //         let a = bls12381_fp6_rand();
+            //         let b = (0..6).fold(a, |acc, _| acc.frobenius_map());
+            //         assert_eq!(a, b);
+            //     }
+            // }
         }
     }
 
@@ -919,9 +931,15 @@ mod tests {
         #[test]
         fn test_frobenius() {
             for _ in 0..10 {
-                let a = bn254_fp6_rand();
-                let b = (0..6).fold(a, |acc, _| acc.frobenius_map());
-                assert_eq!(a, b);
+                let lhs = bn254_fp6_rand();
+                let rhs = lhs
+                    .frobenius_map()
+                    .frobenius_map()
+                    .frobenius_map()
+                    .frobenius_map()
+                    .frobenius_map()
+                    .frobenius_map();
+                assert_eq!(lhs, rhs);
             }
         }
     }

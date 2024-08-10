@@ -41,6 +41,7 @@ pub trait Fp2Element: FpElement {
     fn add(lhs: &Fp2<Self>, rhs: &Fp2<Self>) -> Fp2<Self>;
     fn sub(lhs: &Fp2<Self>, rhs: &Fp2<Self>) -> Fp2<Self>;
     fn mul(lhs: &Fp2<Self>, rhs: &Fp2<Self>) -> Fp2<Self>;
+    fn non_residue() -> Fp2<Self>;
 }
 
 impl Fp2Element for Bls12381 {
@@ -239,18 +240,14 @@ impl Fp2Element for Bls12381 {
             *transmute::<&mut [u32; 24], &Fp2<Bls12381>>(&mut lhs)
         }
     }
+
+    fn non_residue() -> Fp2<Self> {
+        Fp2::new(Bls12381::one(), Bls12381::one())
+    }
 }
 
 impl Fp2Element for Bn254 {
     fn from_bytes_be(bytes: &[u8]) -> Option<Fp2<Bn254>> {
-        // let c0 = Bn254::from_bytes_be(&bytes[..32].try_into().unwrap());
-        // let c1 = Bn254::from_bytes_be(&bytes[32..].try_into().unwrap());
-
-        // match (c0, c1) {
-        //     (Some(c0), Some(c1)) => Some(Fp2::new(c0, c1)),
-        //     _ => None,
-        // }
-
         let a = &BigUint::from_bytes_be(bytes);
         println!("a: {:?}", a);
         let modulus = &Bn254::modulus();
@@ -457,6 +454,10 @@ impl Fp2Element for Bn254 {
             *transmute::<&mut [u32; 16], &Fp2<Bn254>>(&mut lhs)
         }
     }
+
+    fn non_residue() -> Fp2<Self> {
+        Fp2::new(Bn254::one(), Bn254::from_raw_unchecked([9, 0, 0, 0]))
+    }
 }
 
 // impl Bn254 {
@@ -601,7 +602,7 @@ impl<F: Fp2Element> Fp2<F> {
     }
 
     pub fn non_residue() -> Fp2<F> {
-        Fp2::new(F::one(), F::one())
+        F::non_residue()
     }
 
     pub fn is_one(&self) -> bool {
@@ -1094,6 +1095,15 @@ mod bn254_tests {
             assert_eq!(lhs, rhs);
         }
     }
+
+    #[test]
+    fn test_frobenius_map() {
+        for _ in 0..10 {
+            let a = rand_bn254();
+            let b = a.frobenius_map().frobenius_map();
+            assert_eq!(a, b);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -1120,6 +1130,16 @@ mod substrate_bn_tests {
         lhs_bytes == rhs_bytes
     }
 
+    fn fp2_from_slice(bytes: &[u8; 64]) -> Option<Fp2<Bn254>> {
+        let c0 = Bn254::from_bytes_be(&bytes[..32].try_into().unwrap());
+        let c1 = Bn254::from_bytes_be(&bytes[32..].try_into().unwrap());
+
+        match (c0, c1) {
+            (Some(c0), Some(c1)) => Some(Fp2::new(c0, c1)),
+            _ => None,
+        }
+    }
+
     fn fq2_to_slice(f: Fq2) -> [u8; 64] {
         let mut slice = [0u8; 64];
         f.real().to_big_endian(slice[..32].as_mut()).unwrap();
@@ -1137,7 +1157,7 @@ mod substrate_bn_tests {
     fn test_equality() {
         for _ in 0..10 {
             let a_lhs = rand_fq2();
-            let a_rhs = <Bn254 as Fp2Element>::from_bytes_be(&fq2_to_slice(a_lhs)).unwrap();
+            let a_rhs = fp2_from_slice(&fq2_to_slice(a_lhs)).unwrap();
 
             assert!(check_eq(a_lhs, a_rhs), "Equality does not hold");
         }
@@ -1154,9 +1174,9 @@ mod substrate_bn_tests {
             let b_slice = fq2_to_slice(b_lhs);
             let c_slice = fq2_to_slice(c_lhs);
 
-            let a_rhs = <Bn254 as Fp2Element>::from_bytes_be(&a_slice).unwrap();
-            let b_rhs = <Bn254 as Fp2Element>::from_bytes_be(&b_slice).unwrap();
-            let c_rhs = <Bn254 as Fp2Element>::from_bytes_be(&c_slice).unwrap();
+            let a_rhs = fp2_from_slice(&a_slice).unwrap();
+            let b_rhs = fp2_from_slice(&b_slice).unwrap();
+            let c_rhs = fp2_from_slice(&c_slice).unwrap();
             let zero_rhs = Fp2::<Bn254>::zero();
 
             // Basic addition
@@ -1199,8 +1219,8 @@ mod substrate_bn_tests {
             let b_slice = fq2_to_slice(b_lhs);
             let c_slice = fq2_to_slice(c_lhs);
 
-            let a_rhs = <Bn254 as Fp2Element>::from_bytes_be(&a_slice).unwrap();
-            let b_rhs = <Bn254 as Fp2Element>::from_bytes_be(&b_slice).unwrap();
+            let a_rhs = fp2_from_slice(&a_slice).unwrap();
+            let b_rhs = fp2_from_slice(&b_slice).unwrap();
             let zero_rhs = Fp2::<Bn254>::zero();
 
             // Basic subtraction
@@ -1257,9 +1277,9 @@ mod substrate_bn_tests {
             let b_slice = fq2_to_slice(b_lhs);
             let c_slice = fq2_to_slice(c_lhs);
 
-            let a_rhs = <Bn254 as Fp2Element>::from_bytes_be(&a_slice).unwrap();
-            let b_rhs = <Bn254 as Fp2Element>::from_bytes_be(&b_slice).unwrap();
-            let c_rhs = <Bn254 as Fp2Element>::from_bytes_be(&c_slice).unwrap();
+            let a_rhs = fp2_from_slice(&a_slice).unwrap();
+            let b_rhs = fp2_from_slice(&b_slice).unwrap();
+            let c_rhs = fp2_from_slice(&c_slice).unwrap();
             let zero_rhs = Fp2::<Bn254>::zero();
 
             // Basic multiplication
