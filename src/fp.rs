@@ -2,6 +2,7 @@ use crate::utils::*;
 use core::fmt;
 use core::mem::transmute;
 use core::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
+use num_bigint::BigUint;
 use rand::RngCore;
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -12,9 +13,6 @@ cfg_if::cfg_if! {
             io::{self, hint_slice}, syscall_bls12381_fp_addmod, syscall_bls12381_fp_mulmod, syscall_bls12381_fp_submod,
             syscall_bn254_fp_addmod, syscall_bn254_fp_mulmod, syscall_bn254_fp_submod, unconstrained,
         };
-    }
-    else if #[cfg(not(target_os = "zkvm"))] {
-        use num_bigint::BigUint;
     }
 }
 
