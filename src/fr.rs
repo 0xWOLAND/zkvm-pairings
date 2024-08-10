@@ -10,7 +10,7 @@ use ff::{Field, PrimeField};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
 use crate::fp::{Bls12381, Bn254, FpElement};
-use crate::utils::{adc, sbb};
+use crate::utils::sbb;
 
 pub trait FrElement: FpElement {
     const FR_BITS: u32;
@@ -512,6 +512,17 @@ impl<F: FrElement> Fr<F> {
         let mut buf = [0; 64];
         rng.fill_bytes(&mut buf);
         Self::from_bytes_wide(&buf)
+    }
+
+    pub fn from_bytes_be(bytes: &[u8; 32]) -> CtOption<Fr<F>> {
+        let mut tmp = Fr::from_raw_unchecked([0, 0, 0, 0]);
+
+        tmp.0[3] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap());
+        tmp.0[2] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[8..16]).unwrap());
+        tmp.0[1] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[16..24]).unwrap());
+        tmp.0[0] = u64::from_be_bytes(<[u8; 8]>::try_from(&bytes[24..32]).unwrap());
+
+        CtOption::new(tmp, Choice::from(1))
     }
 
     /// Attempts to convert a little-endian byte representation of
