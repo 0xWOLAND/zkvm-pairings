@@ -1,32 +1,30 @@
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use crate::common::{AffinePoint, Curve};
+use crate::common::{B2_X, B2_Y, G2_X0, G2_X1, G2_Y0, G2_Y1, X};
 use crate::fp::Fp;
 use crate::{fp2::Fp2, fr::Fr};
 
 #[derive(Clone, Copy, Debug)]
-pub struct G2Affine<C: Curve> {
-    pub(crate) x: Fp2<C>,
-    pub(crate) y: Fp2<C>,
+pub struct G2Affine {
+    pub(crate) x: Fp2,
+    pub(crate) y: Fp2,
     is_infinity: bool,
 }
 
-impl<C: Curve> PartialEq for G2Affine<C> {
+impl PartialEq for G2Affine {
     fn eq(&self, other: &Self) -> bool {
         self.x == other.x && self.y == other.y
     }
 }
 
-impl<C: Curve> Eq for G2Affine<C> {}
+impl Eq for G2Affine {}
 
-impl<C: Curve> AffinePoint<C> for G2Affine<C> {
-    type Dtype = Fp2<C>;
-
-    fn new(x: Self::Dtype, y: Self::Dtype, is_infinity: bool) -> Self {
+impl G2Affine {
+    pub fn new(x: Fp2, y: Fp2, is_infinity: bool) -> Self {
         G2Affine { x, y, is_infinity }
     }
 
-    fn identity() -> Self {
+    pub fn identity() -> Self {
         G2Affine {
             x: Fp2::zero(),
             y: Fp2::one(),
@@ -34,7 +32,7 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
         }
     }
 
-    fn is_identity(&self) -> bool {
+    pub fn is_identity(&self) -> bool {
         self.is_infinity
     }
 
@@ -42,21 +40,15 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
         self.x.is_zero() && self.y.is_zero()
     }
 
-    fn generator() -> Self {
+    pub fn generator() -> Self {
         G2Affine {
-            x: Fp2::new(
-                Fp::from_raw_unchecked(C::G2_X0),
-                Fp::from_raw_unchecked(C::G2_X1),
-            ),
-            y: Fp2::new(
-                Fp::from_raw_unchecked(C::G2_Y0),
-                Fp::from_raw_unchecked(C::G2_Y1),
-            ),
+            x: Fp2::new(Fp::from_raw_unchecked(G2_X0), Fp::from_raw_unchecked(G2_X1)),
+            y: Fp2::new(Fp::from_raw_unchecked(G2_Y0), Fp::from_raw_unchecked(G2_Y1)),
             is_infinity: false,
         }
     }
 
-    fn is_valid(&self) -> Result<(), String> {
+    pub fn is_valid(&self) -> Result<(), String> {
         if self.is_infinity {
             return Ok(());
         }
@@ -70,10 +62,10 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
         Ok(())
     }
 
-    fn random(mut rng: impl rand::Rng) -> Self {
+    pub fn random(mut rng: impl rand::Rng) -> Self {
         let b = Fp2 {
-            c0: Fp::from_raw_unchecked(C::B2_X),
-            c1: Fp::from_raw_unchecked(C::B2_Y),
+            c0: Fp::from_raw_unchecked(B2_X),
+            c1: Fp::from_raw_unchecked(B2_Y),
         };
         loop {
             let x = Fp2::random(&mut rng);
@@ -109,8 +101,8 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
             return Self::identity();
         }
 
-        let three = Fp::<C>::from(3);
-        let two = Fp::<C>::from(2);
+        let three = Fp::from(3);
+        let two = Fp::from(2);
 
         let slope = (x.square() * three) / (y * two);
         let x_new = slope.square() - x * two;
@@ -121,25 +113,19 @@ impl<C: Curve> AffinePoint<C> for G2Affine<C> {
             is_infinity: false,
         }
     }
-}
 
-impl<C: Curve> G2Affine<C> {
     fn is_on_curve(&self) -> bool {
         let x = self.x;
         let y = self.y;
 
         // y^2 = x^3 + B
         y.square()
-            == x.square() * x
-                + Fp2::new(
-                    Fp::from_raw_unchecked(C::B2_X),
-                    Fp::from_raw_unchecked(C::B2_Y),
-                )
+            == x.square() * x + Fp2::new(Fp::from_raw_unchecked(B2_X), Fp::from_raw_unchecked(B2_Y))
     }
 
     fn mul_by_x(&self) -> Self {
         let mut xself = G2Affine::identity();
-        let mut x = C::X >> 1;
+        let mut x = X >> 1;
         let mut tmp = *self;
         while x != 0 {
             tmp = tmp.double();
@@ -154,7 +140,7 @@ impl<C: Curve> G2Affine<C> {
 
     fn psi(&self) -> Self {
         // 1 / ((u+1) ^ ((q-1)/3))
-        let psi_coeff_x = Fp2::<C>::new(
+        let psi_coeff_x = Fp2::new(
             Fp::zero(),
             Fp::from_raw_unchecked([
                 0x8bfd00000000aaad,
@@ -166,7 +152,7 @@ impl<C: Curve> G2Affine<C> {
             ]),
         );
         // 1 / ((u+1) ^ (p-1)/2)
-        let psi_coeff_y = Fp2::<C>::new(
+        let psi_coeff_y = Fp2::new(
             Fp::from_raw_unchecked([
                 0xf1ee7b04121bdea2,
                 0x304466cf3e67fa0a,
@@ -198,7 +184,7 @@ impl<C: Curve> G2Affine<C> {
         lhs == rhs
     }
 
-    pub fn from_compressed_unchecked(bytes: &[u8; 96]) -> Option<Self> {
+    pub fn from_compressed(bytes: &[u8; 96]) -> Option<Self> {
         // Obtain the three flags from the start of the byte sequence
         let compression_flag_set = (bytes[0] >> 7) & 1 == 1;
         let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
@@ -231,10 +217,7 @@ impl<C: Curve> G2Affine<C> {
                 } else if !infinity_flag_set && compression_flag_set {
                     // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
                     let y_result = ((x.square() * x)
-                        + Fp2::new(
-                            Fp::from_raw_unchecked(C::B2_X),
-                            Fp::from_raw_unchecked(C::B2_Y),
-                        ))
+                        + Fp2::new(Fp::from_raw_unchecked(B2_X), Fp::from_raw_unchecked(B2_Y)))
                     .sqrt();
 
                     y_result.map(|y| {
@@ -259,10 +242,10 @@ impl<C: Curve> G2Affine<C> {
     }
 }
 
-impl<C: Curve> Neg for G2Affine<C> {
-    type Output = G2Affine<C>;
+impl Neg for G2Affine {
+    type Output = G2Affine;
 
-    fn neg(self) -> G2Affine<C> {
+    fn neg(self) -> G2Affine {
         G2Affine {
             x: self.x,
             y: -self.y,
@@ -271,12 +254,12 @@ impl<C: Curve> Neg for G2Affine<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fr<C>> for &'a G2Affine<C> {
-    type Output = G2Affine<C>;
+impl<'a, 'b> Mul<&'b Fr> for &'a G2Affine {
+    type Output = G2Affine;
 
     #[inline]
-    fn mul(self, other: &'b Fr<C>) -> G2Affine<C> {
-        let mut acc = G2Affine::<C>::identity();
+    fn mul(self, other: &'b Fr) -> G2Affine {
+        let mut acc = G2Affine::identity();
 
         for bit in other
             .0
@@ -296,11 +279,11 @@ impl<'a, 'b, C: Curve> Mul<&'b Fr<C>> for &'a G2Affine<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Add<&'b G2Affine<C>> for &'a G2Affine<C> {
-    type Output = G2Affine<C>;
+impl<'a, 'b> Add<&'b G2Affine> for &'a G2Affine {
+    type Output = G2Affine;
 
     #[inline]
-    fn add(self, other: &'b G2Affine<C>) -> G2Affine<C> {
+    fn add(self, other: &'b G2Affine) -> G2Affine {
         if self.is_infinity {
             return *other;
         }
@@ -330,31 +313,31 @@ impl<'a, 'b, C: Curve> Add<&'b G2Affine<C>> for &'a G2Affine<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Sub<&'b G2Affine<C>> for &'a G2Affine<C> {
-    type Output = G2Affine<C>;
+impl<'a, 'b> Sub<&'b G2Affine> for &'a G2Affine {
+    type Output = G2Affine;
 
     #[inline]
-    fn sub(self, other: &'b G2Affine<C>) -> G2Affine<C> {
+    fn sub(self, other: &'b G2Affine) -> G2Affine {
         if self == other {
-            return G2Affine::<C>::identity();
+            return G2Affine::identity();
         }
         self + -(*other)
     }
 }
 
-impl_binops_multiplicative!(G2Affine<C>, Fr<C>);
-impl_binops_additive!(G2Affine<C>, G2Affine<C>);
+impl_binops_multiplicative!(G2Affine, Fr);
+impl_binops_additive!(G2Affine, G2Affine);
 
-pub struct G2Projective<C: Curve> {
-    pub(crate) x: Fp2<C>,
-    pub(crate) y: Fp2<C>,
-    pub(crate) z: Fp2<C>,
+pub struct G2Projective {
+    pub(crate) x: Fp2,
+    pub(crate) y: Fp2,
+    pub(crate) z: Fp2,
 }
 
-impl<C: Curve> G2Projective<C> {
-    pub fn to_affine(&self) -> G2Affine<C> {
+impl G2Projective {
+    pub fn to_affine(&self) -> G2Affine {
         if self.is_identity() {
-            return G2Affine::<C>::identity();
+            return G2Affine::identity();
         }
 
         let zinv = self.z.invert().unwrap();
@@ -371,7 +354,7 @@ impl<C: Curve> G2Projective<C> {
         }
     }
 
-    pub fn from_affine(p: G2Affine<C>) -> Self {
+    pub fn from_affine(p: G2Affine) -> Self {
         G2Projective {
             x: p.x,
             y: p.y,
@@ -386,7 +369,6 @@ impl<C: Curve> G2Projective<C> {
 
 #[cfg(test)]
 mod test {
-    use crate::common::Bls12381Curve;
     use rand::Rng;
 
     use super::*;
@@ -396,10 +378,10 @@ mod test {
         let mut rng = rand::thread_rng();
         for _ in 0..10 {
             let r: u64 = rng.gen::<u64>() % 100;
-            let k = Fr::<Bls12381Curve>::from(r);
-            let a = G2Affine::<Bls12381Curve>::random(&mut rng);
+            let k = Fr::from(r);
+            let a = G2Affine::random(&mut rng);
             let lhs = &a * &k;
-            let rhs = (0..r).fold(G2Affine::<Bls12381Curve>::identity(), |acc, _| acc + &a);
+            let rhs = (0..r).fold(G2Affine::identity(), |acc, _| acc + &a);
             assert_eq!(lhs, rhs);
         }
     }
@@ -407,15 +389,15 @@ mod test {
     #[test]
     fn test_affine_addition() {
         {
-            let a = G2Affine::<Bls12381Curve>::identity();
-            let b = G2Affine::<Bls12381Curve>::identity();
+            let a = G2Affine::identity();
+            let b = G2Affine::identity();
             let c = &a + &b;
             assert!(c.is_identity());
             assert!(c.is_valid().is_ok());
         }
         {
-            let a = G2Affine::<Bls12381Curve>::identity();
-            let b = G2Affine::<Bls12381Curve>::new(
+            let a = G2Affine::identity();
+            let b = G2Affine::new(
                 Fp2::new(
                     Fp::from_raw_unchecked([
                         0xd48056c8c121bdb8,
@@ -457,16 +439,16 @@ mod test {
             let c = a + b;
             assert!(!c.is_identity());
             assert!(c.is_on_curve());
-            assert!(c == G2Affine::<Bls12381Curve>::generator());
+            assert!(c == G2Affine::generator());
         }
         {
-            let a = G2Affine::<Bls12381Curve>::generator().double().double();
-            let b = G2Affine::<Bls12381Curve>::generator().double();
+            let a = G2Affine::generator().double().double();
+            let b = G2Affine::generator().double();
             let c = a + b;
 
-            let mut d = G2Affine::<Bls12381Curve>::generator();
+            let mut d = G2Affine::generator();
             for _ in 0..5 {
-                d += G2Affine::<Bls12381Curve>::generator();
+                d += G2Affine::generator();
             }
             assert!(!c.is_identity());
             assert!(c.is_on_curve());
@@ -478,16 +460,16 @@ mod test {
 
     #[test]
     fn test_doubling() {
-        let tmp = G2Affine::<Bls12381Curve>::identity().double();
-        assert_eq!(tmp, G2Affine::<Bls12381Curve>::identity());
+        let tmp = G2Affine::identity().double();
+        assert_eq!(tmp, G2Affine::identity());
 
-        let tmp = G2Affine::<Bls12381Curve>::generator().double();
+        let tmp = G2Affine::generator().double();
         assert!(!tmp.is_zero());
 
         assert_eq!(
             tmp,
-            G2Affine::<Bls12381Curve>::new(
-                Fp2::<Bls12381Curve>::new(
+            G2Affine::new(
+                Fp2::new(
                     Fp::from_raw_unchecked([
                         0xc952aacab827a053,
                         0x81f14b0bf3611b78,
@@ -505,7 +487,7 @@ mod test {
                         0x0a4edef9c1ed7f72,
                     ]),
                 ),
-                Fp2::<Bls12381Curve>::new(
+                Fp2::new(
                     Fp::from_raw_unchecked([
                         0x999d95d71e4c9899,
                         0xe88dece9764bf3bd,
@@ -530,7 +512,7 @@ mod test {
 
     #[test]
     fn test_torsion_free() {
-        let a = G2Affine::<Bls12381Curve>::new(
+        let a = G2Affine::new(
             Fp2::new(
                 Fp::from_raw_unchecked([
                     0x89f5_50c8_13db_6431,
@@ -570,14 +552,14 @@ mod test {
             false,
         );
         assert!(!a.is_torsion_free());
-        assert!(G2Affine::<Bls12381Curve>::generator().is_torsion_free());
+        assert!(G2Affine::generator().is_torsion_free());
     }
 
     #[test]
     fn test_double_and_add_arithmetic() {
-        let p = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
-        let q = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
-        let r = G2Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+        let p = G2Affine::random(&mut rand::thread_rng());
+        let q = G2Affine::random(&mut rand::thread_rng());
+        let r = G2Affine::random(&mut rand::thread_rng());
 
         let double_p_add_q = p.double() + q;
         let p_plus_q_plus_p = (p + q) + p;

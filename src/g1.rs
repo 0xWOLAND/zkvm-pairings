@@ -1,31 +1,32 @@
 use std::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use crate::common::{AffinePoint, Curve};
-use crate::{fp::Fp, fr::Fr};
+use crate::{
+    common::{B, BETA, G1_X, G1_Y, X},
+    fp::Fp,
+    fr::Fr,
+};
 
 #[derive(Clone, Copy, Debug)]
-pub struct G1Affine<C: Curve> {
-    pub(crate) x: Fp<C>,
-    pub(crate) y: Fp<C>,
+pub struct G1Affine {
+    pub(crate) x: Fp,
+    pub(crate) y: Fp,
     is_infinity: bool,
 }
 
-impl<C: Curve> PartialEq for G1Affine<C> {
+impl PartialEq for G1Affine {
     fn eq(&self, other: &Self) -> bool {
         self.x == other.x && self.y == other.y
     }
 }
 
-impl<C: Curve> Eq for G1Affine<C> {}
+impl Eq for G1Affine {}
 
-impl<C: Curve> AffinePoint<C> for G1Affine<C> {
-    type Dtype = Fp<C>;
-
-    fn new(x: Self::Dtype, y: Self::Dtype, is_infinity: bool) -> Self {
+impl G1Affine {
+    pub fn new(x: Fp, y: Fp, is_infinity: bool) -> Self {
         G1Affine { x, y, is_infinity }
     }
 
-    fn identity() -> Self {
+    pub fn identity() -> Self {
         G1Affine {
             x: Fp::zero(),
             y: Fp::one(),
@@ -33,7 +34,7 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
         }
     }
 
-    fn is_identity(&self) -> bool {
+    pub fn is_identity(&self) -> bool {
         self.is_infinity
     }
 
@@ -41,15 +42,15 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
         self.x.is_zero() && self.y.is_zero()
     }
 
-    fn generator() -> Self {
+    pub fn generator() -> Self {
         G1Affine {
-            x: Fp::from_raw_unchecked(C::G1_X),
-            y: Fp::from_raw_unchecked(C::G1_Y),
+            x: Fp::from_raw_unchecked(G1_X),
+            y: Fp::from_raw_unchecked(G1_Y),
             is_infinity: false,
         }
     }
 
-    fn is_valid(&self) -> Result<(), String> {
+    pub fn is_valid(&self) -> Result<(), String> {
         if self.is_identity() {
             return Ok(());
         }
@@ -64,8 +65,8 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
         Ok(())
     }
 
-    fn random(mut rng: impl rand::Rng) -> Self {
-        let b = Fp::from_raw_unchecked(C::B);
+    pub fn random(mut rng: impl rand::Rng) -> Self {
+        let b = Fp::from_raw_unchecked(B);
         loop {
             let x = Fp::random(&mut rng);
             let flip_sign = rng.next_u32() % 2 != 0;
@@ -106,24 +107,22 @@ impl<C: Curve> AffinePoint<C> for G1Affine<C> {
             is_infinity: false,
         }
     }
-}
 
-impl<C: Curve> G1Affine<C> {
     pub(crate) fn is_on_curve(&self) -> bool {
         let x = self.x;
         let y = self.y;
 
         // y^2 = x^3 + B
-        y.square() == x.square() * x + Fp::from_raw_unchecked(C::B)
+        y.square() == x.square() * x + Fp::from_raw_unchecked(B)
     }
 
     fn endomorphism(&self) -> Self {
-        G1Affine::new(self.x * Fp::from_raw_unchecked(C::BETA), self.y, false) // BETA is a nontrivial third root of unity in Fp
+        G1Affine::new(self.x * Fp::from_raw_unchecked(BETA), self.y, false) // BETA is a nontrivial third root of unity in Fp
     }
 
     fn mul_by_x(&self) -> Self {
         let mut xself = G1Affine::identity();
-        let mut x = C::X >> 1;
+        let mut x = X >> 1;
         let mut tmp = *self;
         while x != 0 {
             tmp = tmp.double();
@@ -142,13 +141,38 @@ impl<C: Curve> G1Affine<C> {
         lhs == rhs
     }
 
-    pub fn from_compressed_unchecked(bytes: &[u8; 48]) -> Option<Self> {
-        // Obtain the three flags from the start of the byte sequence
+    pub fn to_compressed(&self) -> [u8; 48] {
+        // Strictly speaking, self.x is zero already when self.infinity is true, but
+        // to guard against implementation mistakes we do not assume this.
+        let mut res = (if self.is_infinity { Fp::zero() } else { self.x }).to_bytes();
+
+        // This point is in compressed form, so we set the most significant bit.
+        res[0] |= 1u8 << 7;
+
+        // Is this point at infinity? If so, set the second-most significant bit.
+        res[0] = if self.is_infinity {
+            res[0] | 1u8 << 6
+        } else {
+            res[0]
+        };
+
+        // Is the y-coordinate the lexicographically largest of the two associated with the
+        // x-coordinate? If so, set the third-most significant bit so long as this is not
+        // the point at infinity.
+        res[0] = if self.is_infinity {
+            res[0] | (self.y.is_lexicographically_largest() as u8) << 5
+        } else {
+            res[0]
+        };
+
+        res
+    }
+
+    pub fn from_compressed(bytes: &[u8; 48]) -> Option<Self> {
         let compression_flag_set = (bytes[0] >> 7) & 1 == 1;
         let infinity_flag_set = (bytes[0] >> 6) & 1 == 1;
         let sort_flag_set = (bytes[0] >> 5) & 1 == 1;
 
-        // Attempt to obtain the x-coordinate
         let x = {
             let mut tmp = [0; 48];
             tmp.copy_from_slice(&bytes[0..48]);
@@ -159,29 +183,17 @@ impl<C: Curve> G1Affine<C> {
             Fp::from_bytes(&tmp)
         };
 
-        // x.and_then(|x| {
         if infinity_flag_set && compression_flag_set && !sort_flag_set && x.is_zero() {
-            // Infinity flag is set and x-coordinate is zero
             Some(G1Affine::identity())
         } else if !infinity_flag_set && compression_flag_set {
-            // Recover a y-coordinate given x by y = sqrt(x^3 + 4)
-            let y_result = ((x.square() * x) + Fp::<C>::from_raw_unchecked(C::B)).sqrt();
-            // println!("x: {:?}", x);
-            // println!("y_result: {:?}", y_result);
+            let y_result = ((x.square() * x) + Fp::from_raw_unchecked(B)).sqrt();
 
             y_result.map(|y| {
-                // Switch to the correct y-coordinate if necessary
-                // println!(
-                //     "y lexicographically largest: {:?}",
-                //     y.is_lexicographically_largest()
-                // );
                 let y = if !(y.is_lexicographically_largest() ^ sort_flag_set) {
                     y
                 } else {
                     -y
                 };
-
-                // println!("uncompressed y: {:?}", y);
 
                 G1Affine {
                     x,
@@ -192,14 +204,13 @@ impl<C: Curve> G1Affine<C> {
         } else {
             None
         }
-        // })
     }
 }
 
-impl<C: Curve> Neg for G1Affine<C> {
-    type Output = G1Affine<C>;
+impl Neg for G1Affine {
+    type Output = G1Affine;
 
-    fn neg(self) -> G1Affine<C> {
+    fn neg(self) -> G1Affine {
         G1Affine {
             x: self.x,
             y: -self.y,
@@ -208,12 +219,12 @@ impl<C: Curve> Neg for G1Affine<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fr<C>> for &'a G1Affine<C> {
-    type Output = G1Affine<C>;
+impl<'a, 'b> Mul<&'b Fr> for &'a G1Affine {
+    type Output = G1Affine;
 
     #[inline]
-    fn mul(self, other: &'b Fr<C>) -> G1Affine<C> {
-        let mut acc = G1Affine::<C>::identity();
+    fn mul(self, other: &'b Fr) -> G1Affine {
+        let mut acc = G1Affine::identity();
 
         for bit in other
             .0
@@ -233,11 +244,11 @@ impl<'a, 'b, C: Curve> Mul<&'b Fr<C>> for &'a G1Affine<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Add<&'b G1Affine<C>> for &'a G1Affine<C> {
-    type Output = G1Affine<C>;
+impl<'a, 'b> Add<&'b G1Affine> for &'a G1Affine {
+    type Output = G1Affine;
 
     #[inline]
-    fn add(self, other: &'b G1Affine<C>) -> G1Affine<C> {
+    fn add(self, other: &'b G1Affine) -> G1Affine {
         if self.is_infinity {
             return *other;
         }
@@ -267,20 +278,20 @@ impl<'a, 'b, C: Curve> Add<&'b G1Affine<C>> for &'a G1Affine<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Sub<&'b G1Affine<C>> for &'a G1Affine<C> {
-    type Output = G1Affine<C>;
+impl<'a, 'b> Sub<&'b G1Affine> for &'a G1Affine {
+    type Output = G1Affine;
 
     #[inline]
-    fn sub(self, other: &'b G1Affine<C>) -> G1Affine<C> {
+    fn sub(self, other: &'b G1Affine) -> G1Affine {
         if self == other {
-            return G1Affine::<C>::identity();
+            return G1Affine::identity();
         }
         self + -(*other)
     }
 }
 
-impl_binops_multiplicative!(G1Affine<C>, Fr<C>);
-impl_binops_additive!(G1Affine<C>, G1Affine<C>);
+impl_binops_multiplicative!(G1Affine, Fr);
+impl_binops_additive!(G1Affine, G1Affine);
 
 #[cfg(test)]
 mod test {
@@ -288,9 +299,8 @@ mod test {
     use rand::Rng;
 
     use super::*;
-    use crate::common::Bls12381Curve;
 
-    fn fp2_rand() -> G1Affine<Bls12381Curve> {
+    fn fp2_rand() -> G1Affine {
         let mut rng = rand::thread_rng();
         G1Affine::random(&mut rng)
     }
@@ -302,13 +312,13 @@ mod test {
             let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
             let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
-            let a = G1Affine::<Bls12381Curve>::new(
+            let a = G1Affine::new(
                 Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
                 Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
                 false,
             );
 
-            let b = G1Affine::<Bls12381Curve>::new(
+            let b = G1Affine::new(
                 Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
                 Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
                 false,
@@ -320,7 +330,7 @@ mod test {
 
     #[test]
     fn test_valid_point() {
-        let a = G1Affine::<Bls12381Curve>::new(
+        let a = G1Affine::new(
             Fp::from_raw_unchecked([
                 0x1b72cc2215a57793,
                 0x6263ee31e953a86d,
@@ -339,12 +349,12 @@ mod test {
             ]),
             false,
         );
-        assert!(G1Affine::<Bls12381Curve>::generator().is_valid().unwrap() == ());
+        assert!(G1Affine::generator().is_valid().unwrap() == ());
     }
 
     #[test]
     fn test_double() {
-        let a = G1Affine::<Bls12381Curve>::new(
+        let a = G1Affine::new(
             Fp::from_raw_unchecked([
                 0xfb3af00adb22c6bb,
                 0x6c55e83ff97a1aef,
@@ -363,7 +373,7 @@ mod test {
             ]),
             false,
         );
-        let a_double = G1Affine::<Bls12381Curve>::new(
+        let a_double = G1Affine::new(
             Fp::from_raw_unchecked([
                 0xc39a8c5529bf0f4e,
                 0xe28f75bb8f1c7c42,
@@ -384,7 +394,7 @@ mod test {
         );
         assert_eq!(a.double(), a_double);
 
-        let mut b = G1Affine::<Bls12381Curve>::new(
+        let mut b = G1Affine::new(
             Fp::from_raw_unchecked([
                 0x1b72cc2215a57793,
                 0x6263ee31e953a86d,
@@ -404,7 +414,7 @@ mod test {
             false,
         );
 
-        let b_double = G1Affine::<Bls12381Curve>::new(
+        let b_double = G1Affine::new(
             Fp::from_raw_unchecked([
                 0xd1e2c01839752ada,
                 0x2c4c7d1e2b03e6b1,
@@ -425,7 +435,7 @@ mod test {
         );
 
         for _ in 0..10 {
-            let b = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+            let b = G1Affine::random(&mut rand::thread_rng());
             let b1 = b.double() + b;
             let b2 = b1 + b;
             let b3 = b * Fr::from(4);
@@ -437,9 +447,9 @@ mod test {
     #[test]
     fn test_double_and_add_arithmetic() {
         for _ in 0..100 {
-            let p = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
-            let q = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
-            let r = G1Affine::<Bls12381Curve>::random(&mut rand::thread_rng());
+            let p = G1Affine::random(&mut rand::thread_rng());
+            let q = G1Affine::random(&mut rand::thread_rng());
+            let r = G1Affine::random(&mut rand::thread_rng());
 
             let double_p_add_q = p.double() + q;
             let p_plus_q_plus_p = (p + q) + p;
@@ -454,11 +464,26 @@ mod test {
         let mut rng = rand::thread_rng();
         for _ in 0..10 {
             let r: u64 = rng.gen::<u64>() % 100;
-            let k = Fr::<Bls12381Curve>::from(r);
-            let a = G1Affine::<Bls12381Curve>::random(&mut rng);
+            let k = Fr::from(r);
+            let a = G1Affine::random(&mut rng);
             let lhs = &a * &k;
-            let rhs = (0..r).fold(G1Affine::<Bls12381Curve>::identity(), |acc, _| acc + &a);
+            let rhs = (0..r).fold(G1Affine::identity(), |acc, _| acc + &a);
             assert_eq!(lhs, rhs);
+        }
+    }
+
+    #[test]
+    fn test_to_from_compressed() {
+        for _ in 0..10 {
+            let a = G1Affine::random(&mut rand::thread_rng());
+            let compressed = a.to_compressed();
+            let b = G1Affine::from_compressed(&compressed).unwrap();
+            let recompressed = b.to_compressed();
+            println!("compressed: {:?}", compressed);
+            println!("recompressed: {:?}", recompressed);
+            let b = G1Affine::from_compressed(&recompressed).unwrap();
+
+            assert_eq!(a, b);
         }
     }
 }

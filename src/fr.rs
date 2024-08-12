@@ -10,7 +10,10 @@ use std::mem::transmute;
 use ff::{Field, PrimeField};
 use subtle::{Choice, ConditionallySelectable, ConstantTimeEq, CtOption};
 
-use crate::common::{Bls12381Curve, Curve};
+use crate::common::{
+    FR_BITS, FR_DELTA, FR_GENERATOR, FR_MODULUS, FR_R, FR_ROOT_OF_UNITY, FR_ROOT_OF_UNITY_INV,
+    FR_S, FR_TWO_INV,
+};
 use crate::utils::{adc, sbb};
 
 /// Represents an element of the scalar field $\mathbb{F}_q$ of the BLS12-381 elliptic
@@ -18,9 +21,9 @@ use crate::utils::{adc, sbb};
 // The internal representation of this type is four 64-bit unsigned
 // integers in little-endian order. `Scalar` values are always in
 #[derive(Clone, Copy)]
-pub struct Fr<C: Curve>(pub [u64; 4], PhantomData<C>);
+pub struct Fr(pub [u64; 4]);
 
-impl<C: Curve> fmt::Debug for Fr<C> {
+impl fmt::Debug for Fr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let tmp = self.to_bytes();
         write!(f, "0x")?;
@@ -31,19 +34,19 @@ impl<C: Curve> fmt::Debug for Fr<C> {
     }
 }
 
-impl<C: Curve> fmt::Display for Fr<C> {
+impl fmt::Display for Fr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
 
-impl<C: Curve> From<u64> for Fr<C> {
-    fn from(val: u64) -> Fr<C> {
+impl From<u64> for Fr {
+    fn from(val: u64) -> Fr {
         Fr::from_raw([val, 0, 0, 0])
     }
 }
 
-impl<C: Curve> ConstantTimeEq for Fr<C> {
+impl ConstantTimeEq for Fr {
     fn ct_eq(&self, other: &Self) -> Choice {
         self.0[0].ct_eq(&other.0[0])
             & self.0[1].ct_eq(&other.0[1])
@@ -52,14 +55,14 @@ impl<C: Curve> ConstantTimeEq for Fr<C> {
     }
 }
 
-impl<C: Curve> PartialEq for Fr<C> {
+impl PartialEq for Fr {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         bool::from(self.ct_eq(other))
     }
 }
 
-impl<C: Curve> ConditionallySelectable for Fr<C> {
+impl ConditionallySelectable for Fr {
     fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
         Fr::from_raw([
             u64::conditional_select(&a.0[0], &b.0[0], choice),
@@ -70,55 +73,55 @@ impl<C: Curve> ConditionallySelectable for Fr<C> {
     }
 }
 
-impl<'a, C: Curve> Neg for &'a Fr<C> {
-    type Output = Fr<C>;
+impl<'a> Neg for &'a Fr {
+    type Output = Fr;
 
     #[inline]
-    fn neg(self) -> Fr<C> {
+    fn neg(self) -> Fr {
         self.neg()
     }
 }
 
-impl<C: Curve> Neg for Fr<C> {
-    type Output = Fr<C>;
+impl Neg for Fr {
+    type Output = Fr;
 
     #[inline]
-    fn neg(self) -> Fr<C> {
+    fn neg(self) -> Fr {
         -&self
     }
 }
 
-impl<'a, 'b, C: Curve> Sub<&'b Fr<C>> for &'a Fr<C> {
-    type Output = Fr<C>;
+impl<'a, 'b> Sub<&'b Fr> for &'a Fr {
+    type Output = Fr;
 
     #[inline]
-    fn sub(self, rhs: &'b Fr<C>) -> Fr<C> {
+    fn sub(self, rhs: &'b Fr) -> Fr {
         self.sub(rhs)
     }
 }
 
-impl<'a, 'b, C: Curve> Add<&'b Fr<C>> for &'a Fr<C> {
-    type Output = Fr<C>;
+impl<'a, 'b> Add<&'b Fr> for &'a Fr {
+    type Output = Fr;
 
     #[inline]
-    fn add(self, rhs: &'b Fr<C>) -> Fr<C> {
+    fn add(self, rhs: &'b Fr) -> Fr {
         self.add(rhs)
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fr<C>> for &'a Fr<C> {
-    type Output = Fr<C>;
+impl<'a, 'b> Mul<&'b Fr> for &'a Fr {
+    type Output = Fr;
 
     #[inline]
-    fn mul(self, rhs: &'b Fr<C>) -> Fr<C> {
+    fn mul(self, rhs: &'b Fr) -> Fr {
         self.mul(rhs)
     }
 }
 
-impl_binops_additive!(Fr<C>, Fr<C>);
-impl_binops_multiplicative!(Fr<C>, Fr<C>);
+impl_binops_additive!(Fr, Fr);
+impl_binops_multiplicative!(Fr, Fr);
 
-impl<C: Curve> Default for Fr<C> {
+impl Default for Fr {
     #[inline]
     fn default() -> Self {
         Self::zero()
@@ -126,24 +129,24 @@ impl<C: Curve> Default for Fr<C> {
 }
 
 #[cfg(feature = "zeroize")]
-impl<C: Curve> zeroize::DefaultIsZeroes for Fr<C> {}
+impl zeroize::DefaultIsZeroes for Fr {}
 
-impl<C: Curve> Fr<C> {
+impl Fr {
     /// Returns zero, the additive identity.
     #[inline]
-    pub const fn zero() -> Fr<C> {
+    pub const fn zero() -> Fr {
         Fr::from_raw([0, 0, 0, 0])
     }
 
     /// Returns one, the multiplicative identity.
     #[inline]
-    pub const fn one() -> Fr<C> {
+    pub const fn one() -> Fr {
         Fr::from_raw([1, 0, 0, 0])
     }
 
     /// Doubles this field element.
     #[inline]
-    pub const fn double(&self) -> Fr<C> {
+    pub const fn double(&self) -> Fr {
         // TODO: This can be achieved more efficiently with a bitshift.
         self.add(self)
     }
@@ -156,7 +159,7 @@ impl<C: Curve> Fr<C> {
 
     /// Attempts to convert a little-endian byte representation of
     /// a scalar into a `Scalar`, failing if the input is not canonical.
-    pub fn from_bytes(bytes: &[u8; 32]) -> CtOption<Fr<C>> {
+    pub fn from_bytes(bytes: &[u8; 32]) -> CtOption<Fr> {
         let mut tmp = Fr::from_raw([0, 0, 0, 0]);
 
         tmp.0[0] = u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap());
@@ -165,10 +168,10 @@ impl<C: Curve> Fr<C> {
         tmp.0[3] = u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[24..32]).unwrap());
 
         // Try to subtract the modulus
-        let (_, borrow) = sbb(tmp.0[0], C::FR_MODULUS[0], 0);
-        let (_, borrow) = sbb(tmp.0[1], C::FR_MODULUS[1], borrow);
-        let (_, borrow) = sbb(tmp.0[2], C::FR_MODULUS[2], borrow);
-        let (_, borrow) = sbb(tmp.0[3], C::FR_MODULUS[3], borrow);
+        let (_, borrow) = sbb(tmp.0[0], FR_MODULUS[0], 0);
+        let (_, borrow) = sbb(tmp.0[1], FR_MODULUS[1], borrow);
+        let (_, borrow) = sbb(tmp.0[2], FR_MODULUS[2], borrow);
+        let (_, borrow) = sbb(tmp.0[3], FR_MODULUS[3], borrow);
 
         // If the element is smaller than MODULUS then the
         // subtraction will underflow, producing a borrow value
@@ -195,7 +198,7 @@ impl<C: Curve> Fr<C> {
 
     /// Converts a 512-bit little endian integer into
     /// a `Scalar` by reducing by the modulus.
-    pub fn from_bytes_wide(bytes: &[u8; 64]) -> Fr<C> {
+    pub fn from_bytes_wide(bytes: &[u8; 64]) -> Fr {
         Fr::from_u512([
             u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[0..8]).unwrap()),
             u64::from_le_bytes(<[u8; 8]>::try_from(&bytes[8..16]).unwrap()),
@@ -208,7 +211,7 @@ impl<C: Curve> Fr<C> {
         ])
     }
 
-    fn from_u512(limbs: [u64; 8]) -> Fr<C> {
+    fn from_u512(limbs: [u64; 8]) -> Fr {
         // We reduce an arbitrary 512-bit number by decomposing it into two 256-bit digits
         // with the higher bits multiplied by 2^256. Thus, we perform two reductions
         //
@@ -217,18 +220,18 @@ impl<C: Curve> Fr<C> {
 
         let d0 = Fr::from_raw([limbs[0], limbs[1], limbs[2], limbs[3]]);
         let d1 = Fr::from_raw([limbs[4], limbs[5], limbs[6], limbs[7]]);
-        d0 + d1 * Fr::from_raw(C::FR_R)
+        d0 + d1 * Fr::from_raw(FR_R)
     }
 
     /// Converts from an integer represented in little endian
     /// into its (congruent) `Scalar` representation.
     pub const fn from_raw(val: [u64; 4]) -> Self {
-        Fr(val, PhantomData::<C>)
+        Fr(val)
     }
 
     /// Squares this element.
     #[inline]
-    pub fn square(&self) -> Fr<C> {
+    pub fn square(&self) -> Fr {
         self * self
     }
 
@@ -271,7 +274,7 @@ impl<C: Curve> Fr<C> {
     /// failing if the element is zero.
     pub fn invert(&self) -> CtOption<Self> {
         #[inline(always)]
-        fn square_assign_multi<C: Curve>(n: &mut Fr<C>, num_times: usize) {
+        fn square_assign_multi(n: &mut Fr, num_times: usize) {
             for _ in 0..num_times {
                 *n = n.square();
             }
@@ -372,7 +375,7 @@ impl<C: Curve> Fr<C> {
         use num_bigint::BigUint;
 
         unsafe {
-            let modulus = BigUint::from_slice(&transmute::<[u64; 4], [u32; 8]>(C::FR_MODULUS));
+            let modulus = BigUint::from_slice(&transmute::<[u64; 4], [u32; 8]>(FR_MODULUS));
             let slice_lhs = transmute::<&[u64; 4], &[u32; 8]>(&self.0);
             let lhs = BigUint::from_slice(slice_lhs) % &modulus;
             let rhs = BigUint::from_bytes_le(&rhs.to_bytes()) % &modulus;
@@ -395,10 +398,10 @@ impl<C: Curve> Fr<C> {
 
         // If underflow occurred on the final limb, borrow = 0xfff...fff, otherwise
         // borrow = 0x000...000. Thus, we use it as a mask to conditionally add the modulus.
-        let (d0, carry) = adc(d0, C::FR_MODULUS[0] & borrow, 0);
-        let (d1, carry) = adc(d1, C::FR_MODULUS[1] & borrow, carry);
-        let (d2, carry) = adc(d2, C::FR_MODULUS[2] & borrow, carry);
-        let (d3, _) = adc(d3, C::FR_MODULUS[3] & borrow, carry);
+        let (d0, carry) = adc(d0, FR_MODULUS[0] & borrow, 0);
+        let (d1, carry) = adc(d1, FR_MODULUS[1] & borrow, carry);
+        let (d2, carry) = adc(d2, FR_MODULUS[2] & borrow, carry);
+        let (d3, _) = adc(d3, FR_MODULUS[3] & borrow, carry);
 
         Fr::from_raw([d0, d1, d2, d3])
     }
@@ -413,7 +416,7 @@ impl<C: Curve> Fr<C> {
 
         // Attempt to subtract the modulus, to ensure the value
         // is smaller than the modulus.
-        (&Fr::from_raw([d0, d1, d2, d3])).sub(&Fr::from_raw(C::FR_MODULUS))
+        (&Fr::from_raw([d0, d1, d2, d3])).sub(&Fr::from_raw(FR_MODULUS))
     }
 
     /// Negates `self`.
@@ -422,10 +425,10 @@ impl<C: Curve> Fr<C> {
         // Subtract `self` from `MODULUS` to negate. Ignore the final
         // borrow because it cannot underflow; self is guaranteed to
         // be in the field.
-        let (d0, borrow) = sbb(C::FR_MODULUS[0], self.0[0], 0);
-        let (d1, borrow) = sbb(C::FR_MODULUS[1], self.0[1], borrow);
-        let (d2, borrow) = sbb(C::FR_MODULUS[2], self.0[2], borrow);
-        let (d3, _) = sbb(C::FR_MODULUS[3], self.0[3], borrow);
+        let (d0, borrow) = sbb(FR_MODULUS[0], self.0[0], 0);
+        let (d1, borrow) = sbb(FR_MODULUS[1], self.0[1], borrow);
+        let (d2, borrow) = sbb(FR_MODULUS[2], self.0[2], borrow);
+        let (d3, _) = sbb(FR_MODULUS[3], self.0[3], borrow);
 
         // `tmp` could be `MODULUS` if `self` was zero. Create a mask that is
         // zero if `self` was zero, and `u64::max_value()` if self was nonzero.
@@ -435,20 +438,20 @@ impl<C: Curve> Fr<C> {
     }
 }
 
-impl<C: Curve> From<Fr<C>> for [u8; 32] {
-    fn from(value: Fr<C>) -> [u8; 32] {
+impl From<Fr> for [u8; 32] {
+    fn from(value: Fr) -> [u8; 32] {
         value.to_bytes()
     }
 }
 
-impl<'a, C: Curve> From<&'a Fr<C>> for [u8; 32] {
-    fn from(value: &'a Fr<C>) -> [u8; 32] {
+impl<'a> From<&'a Fr> for [u8; 32] {
+    fn from(value: &'a Fr) -> [u8; 32] {
         value.to_bytes()
     }
 }
 
-impl<C: Curve> Eq for Fr<C> {}
-impl<C: Curve + 'static> Field for Fr<C> {
+impl Eq for Fr {}
+impl Field for Fr {
     const ZERO: Self = Self::zero();
     const ONE: Self = Self::one();
 
@@ -494,7 +497,7 @@ impl<C: Curve + 'static> Field for Fr<C> {
     }
 }
 
-impl<C: Curve + 'static> PrimeField for Fr<C> {
+impl PrimeField for Fr {
     type Repr = [u8; 32];
 
     fn from_repr(r: Self::Repr) -> CtOption<Self> {
@@ -511,19 +514,19 @@ impl<C: Curve + 'static> PrimeField for Fr<C> {
 
     const MODULUS: &'static str =
         "0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001";
-    const NUM_BITS: u32 = C::FR_BITS as u32;
+    const NUM_BITS: u32 = FR_BITS as u32;
     const CAPACITY: u32 = Self::NUM_BITS - 1;
-    const TWO_INV: Self = Fr::from_raw(C::FR_TWO_INV);
-    const MULTIPLICATIVE_GENERATOR: Self = Fr::from_raw(C::FR_GENERATOR);
-    const S: u32 = C::FR_S as u32;
-    const ROOT_OF_UNITY: Self = Fr::from_raw(C::FR_ROOT_OF_UNITY);
-    const ROOT_OF_UNITY_INV: Self = Fr::from_raw(C::FR_ROOT_OF_UNITY_INV);
-    const DELTA: Self = Fr::from_raw(C::FR_DELTA);
+    const TWO_INV: Self = Fr::from_raw(FR_TWO_INV);
+    const MULTIPLICATIVE_GENERATOR: Self = Fr::from_raw(FR_GENERATOR);
+    const S: u32 = FR_S as u32;
+    const ROOT_OF_UNITY: Self = Fr::from_raw(FR_ROOT_OF_UNITY);
+    const ROOT_OF_UNITY_INV: Self = Fr::from_raw(FR_ROOT_OF_UNITY_INV);
+    const DELTA: Self = Fr::from_raw(FR_DELTA);
 }
 
-impl<T, C: Curve> core::iter::Sum<T> for Fr<C>
+impl<T> core::iter::Sum<T> for Fr
 where
-    T: core::borrow::Borrow<Fr<C>>,
+    T: core::borrow::Borrow<Fr>,
 {
     fn sum<I>(iter: I) -> Self
     where
@@ -533,9 +536,9 @@ where
     }
 }
 
-impl<T, C: Curve> core::iter::Product<T> for Fr<C>
+impl<T> core::iter::Product<T> for Fr
 where
-    T: core::borrow::Borrow<Fr<C>>,
+    T: core::borrow::Borrow<Fr>,
 {
     fn product<I>(iter: I) -> Self
     where
@@ -547,46 +550,33 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::str::FromStr;
-
-    use num_bigint::BigUint;
-
-    use crate::common::Bls12381Curve;
+    use crate::common::{FR_INV, FR_R2};
 
     use super::*;
 
     #[test]
     fn test_constants() {
         assert_eq!(
-            Fr::<Bls12381Curve>::MODULUS,
+            Fr::MODULUS,
             "0x73eda753299d7d483339d80809a1d80553bda402fffe5bfeffffffff00000001",
         );
 
-        assert_eq!(
-            Fr::<Bls12381Curve>::from(2) * Fr::<Bls12381Curve>::TWO_INV,
-            Fr::<Bls12381Curve>::ONE
-        );
+        assert_eq!(Fr::from(2) * Fr::TWO_INV, Fr::ONE);
 
-        assert_eq!(
-            Fr::<Bls12381Curve>::ROOT_OF_UNITY * Fr::<Bls12381Curve>::ROOT_OF_UNITY_INV,
-            Fr::<Bls12381Curve>::ONE,
-        );
+        assert_eq!(Fr::ROOT_OF_UNITY * Fr::ROOT_OF_UNITY_INV, Fr::ONE,);
 
         // ROOT_OF_UNITY^{2^s} mod m == 1
-        assert_eq!(
-            Fr::<Bls12381Curve>::ROOT_OF_UNITY.pow(&[1u64 << Bls12381Curve::FR_S, 0, 0, 0]),
-            Fr::<Bls12381Curve>::ONE,
-        );
+        assert_eq!(Fr::ROOT_OF_UNITY.pow(&[1u64 << FR_S, 0, 0, 0]), Fr::ONE,);
 
         // DELTA^{t} mod m == 1
         assert_eq!(
-            Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_DELTA).pow(&[
+            Fr::from_raw(FR_DELTA).pow(&[
                 0xfffe_5bfe_ffff_ffff,
                 0x09a1_d805_53bd_a402,
                 0x299d_7d48_3339_d808,
                 0x0000_0000_73ed_a753,
             ]),
-            Fr::<Bls12381Curve>::one(),
+            Fr::one(),
         );
     }
 
@@ -598,11 +588,11 @@ mod test {
         let mut inv = 1u64;
         for _ in 0..63 {
             inv = inv.wrapping_mul(inv);
-            inv = inv.wrapping_mul(Bls12381Curve::FR_MODULUS[0]);
+            inv = inv.wrapping_mul(FR_MODULUS[0]);
         }
         inv = inv.wrapping_neg();
 
-        assert_eq!(inv, Bls12381Curve::FR_INV);
+        assert_eq!(inv, FR_INV);
     }
 
     #[cfg(feature = "std")]
@@ -624,21 +614,18 @@ mod test {
 
     #[test]
     fn test_equality() {
-        assert_eq!(Fr::<Bls12381Curve>::zero(), Fr::<Bls12381Curve>::zero());
-        assert_eq!(Fr::<Bls12381Curve>::one(), Fr::<Bls12381Curve>::one());
-        assert_eq!(
-            Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R2),
-            Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R2)
-        );
+        assert_eq!(Fr::zero(), Fr::zero());
+        assert_eq!(Fr::one(), Fr::one());
+        assert_eq!(Fr::from_raw(FR_R2), Fr::from_raw(FR_R2));
 
-        assert!(Fr::<Bls12381Curve>::zero() != Fr::<Bls12381Curve>::one());
-        assert!(Fr::<Bls12381Curve>::one() != Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R2));
+        assert!(Fr::zero() != Fr::one());
+        assert!(Fr::one() != Fr::from_raw(FR_R2));
     }
 
     #[test]
     fn test_to_bytes() {
         assert_eq!(
-            Fr::<Bls12381Curve>::zero().to_bytes(),
+            Fr::zero().to_bytes(),
             [
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0
@@ -646,7 +633,7 @@ mod test {
         );
 
         assert_eq!(
-            Fr::<Bls12381Curve>::one().to_bytes(),
+            Fr::one().to_bytes(),
             [
                 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0
@@ -654,7 +641,7 @@ mod test {
         );
 
         assert_eq!(
-            (-&Fr::<Bls12381Curve>::one()).to_bytes(),
+            (-&Fr::one()).to_bytes(),
             [
                 0, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9,
                 8, 216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115
@@ -665,7 +652,7 @@ mod test {
     #[test]
     fn test_from_bytes() {
         assert_eq!(
-            Fr::<Bls12381Curve>::from_bytes(&[
+            Fr::from_bytes(&[
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0
             ])
@@ -674,7 +661,7 @@ mod test {
         );
 
         assert_eq!(
-            Fr::<Bls12381Curve>::from_bytes(&[
+            Fr::from_bytes(&[
                 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0
             ])
@@ -683,14 +670,13 @@ mod test {
         );
 
         assert_eq!(
-            Fr(Bls12381Curve::FR_R2, PhantomData::<Bls12381Curve>),
-            Fr::from_bytes(&Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R2).to_bytes())
-                .unwrap()
+            Fr(FR_R2),
+            Fr::from_bytes(&Fr::from_raw(FR_R2).to_bytes()).unwrap()
         );
 
         // -1 should work
         assert!(bool::from(
-            Fr::<Bls12381Curve>::from_bytes(&[
+            Fr::from_bytes(&[
                 0, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9,
                 8, 216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115
             ])
@@ -699,7 +685,7 @@ mod test {
 
         // modulus is invalid
         assert!(bool::from(
-            Fr::<Bls12381Curve>::from_bytes(&[
+            Fr::from_bytes(&[
                 1, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9,
                 8, 216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115
             ])
@@ -708,21 +694,21 @@ mod test {
 
         // Anything larger than the modulus is invalid
         assert!(bool::from(
-            Fr::<Bls12381Curve>::from_bytes(&[
+            Fr::from_bytes(&[
                 2, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9,
                 8, 216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115
             ])
             .is_none()
         ));
         assert!(bool::from(
-            Fr::<Bls12381Curve>::from_bytes(&[
+            Fr::from_bytes(&[
                 1, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9,
                 8, 216, 58, 51, 72, 125, 157, 41, 83, 167, 237, 115
             ])
             .is_none()
         ));
         assert!(bool::from(
-            Fr::<Bls12381Curve>::from_bytes(&[
+            Fr::from_bytes(&[
                 1, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9,
                 8, 216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 116
             ])
@@ -733,12 +719,12 @@ mod test {
     #[test]
     fn test_from_u512_zero() {
         assert_eq!(
-            Fr::<Bls12381Curve>::zero(),
-            Fr::<Bls12381Curve>::from_u512([
-                Bls12381Curve::FR_MODULUS[0],
-                Bls12381Curve::FR_MODULUS[1],
-                Bls12381Curve::FR_MODULUS[2],
-                Bls12381Curve::FR_MODULUS[3],
+            Fr::zero(),
+            Fr::from_u512([
+                FR_MODULUS[0],
+                FR_MODULUS[1],
+                FR_MODULUS[2],
+                FR_MODULUS[3],
                 0,
                 0,
                 0,
@@ -750,15 +736,15 @@ mod test {
     #[test]
     fn test_from_u512_r() {
         assert_eq!(
-            Fr::<Bls12381Curve>::from_raw([1, 0, 0, 0]),
-            Fr::<Bls12381Curve>::from_u512([1, 0, 0, 0, 0, 0, 0, 0])
+            Fr::from_raw([1, 0, 0, 0]),
+            Fr::from_u512([1, 0, 0, 0, 0, 0, 0, 0])
         );
     }
 
     #[test]
     fn test_from_bytes_wide_r() {
         assert_eq!(
-            Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R),
+            Fr::from_raw(FR_R),
             Fr::from_bytes_wide(&[
                 254, 255, 255, 255, 1, 0, 0, 0, 2, 72, 3, 0, 250, 183, 132, 88, 245, 79, 188, 236,
                 239, 79, 140, 153, 111, 5, 197, 172, 89, 177, 36, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -770,8 +756,8 @@ mod test {
     #[test]
     fn test_from_bytes_wide_negative_one() {
         assert_eq!(
-            -&Fr::<Bls12381Curve>::one(),
-            Fr::<Bls12381Curve>::from_bytes_wide(&[
+            -&Fr::one(),
+            Fr::from_bytes_wide(&[
                 0, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9,
                 8, 216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -781,23 +767,14 @@ mod test {
 
     #[test]
     fn test_zero() {
-        assert_eq!(Fr::<Bls12381Curve>::zero(), -&Fr::<Bls12381Curve>::zero());
-        assert_eq!(
-            Fr::<Bls12381Curve>::zero(),
-            Fr::<Bls12381Curve>::zero() + Fr::<Bls12381Curve>::zero()
-        );
-        assert_eq!(
-            Fr::<Bls12381Curve>::zero(),
-            Fr::<Bls12381Curve>::zero() - Fr::<Bls12381Curve>::zero()
-        );
-        assert_eq!(
-            Fr::<Bls12381Curve>::zero(),
-            Fr::<Bls12381Curve>::zero() * Fr::<Bls12381Curve>::zero()
-        );
+        assert_eq!(Fr::zero(), -&Fr::zero());
+        assert_eq!(Fr::zero(), Fr::zero() + Fr::zero());
+        assert_eq!(Fr::zero(), Fr::zero() - Fr::zero());
+        assert_eq!(Fr::zero(), Fr::zero() * Fr::zero());
     }
 
     #[cfg(test)]
-    const LARGEST: Fr<Bls12381Curve> = Fr::<Bls12381Curve>::from_raw([
+    const LARGEST: Fr = Fr::from_raw([
         0xffff_ffff_0000_0000,
         0x53bd_a402_fffe_5bfe,
         0x3339_d808_09a1_d805,
@@ -811,7 +788,7 @@ mod test {
 
         assert_eq!(
             tmp,
-            Fr::<Bls12381Curve>::from_raw([
+            Fr::from_raw([
                 0xffff_fffe_ffff_ffff,
                 0x53bd_a402_fffe_5bfe,
                 0x3339_d808_09a1_d805,
@@ -820,7 +797,7 @@ mod test {
         );
 
         let mut tmp = LARGEST;
-        tmp += &Fr::<Bls12381Curve>::from_raw([1, 0, 0, 0]);
+        tmp += &Fr::from_raw([1, 0, 0, 0]);
 
         assert_eq!(tmp, Fr::zero());
     }
@@ -829,11 +806,11 @@ mod test {
     fn test_negation() {
         let tmp = -&LARGEST;
 
-        assert_eq!(tmp, Fr::<Bls12381Curve>::from_raw([1, 0, 0, 0]));
+        assert_eq!(tmp, Fr::from_raw([1, 0, 0, 0]));
 
-        let tmp = -&Fr::<Bls12381Curve>::zero();
+        let tmp = -&Fr::zero();
         assert_eq!(tmp, Fr::zero());
-        let tmp = -&Fr::<Bls12381Curve>::from_raw([1, 0, 0, 0]);
+        let tmp = -&Fr::from_raw([1, 0, 0, 0]);
         assert_eq!(tmp, LARGEST);
     }
 
@@ -847,7 +824,7 @@ mod test {
         let mut tmp = Fr::zero();
         tmp -= &LARGEST;
 
-        let mut tmp2 = Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_MODULUS);
+        let mut tmp2 = Fr::from_raw(FR_MODULUS);
         tmp2 -= &LARGEST;
 
         assert_eq!(tmp, tmp2);
@@ -913,14 +890,11 @@ mod test {
 
     #[test]
     fn test_inversion() {
-        assert!(bool::from(Fr::<Bls12381Curve>::zero().invert().is_none()));
-        assert_eq!(Fr::<Bls12381Curve>::one().invert().unwrap(), Fr::one());
-        assert_eq!(
-            (-&Fr::<Bls12381Curve>::one()).invert().unwrap(),
-            -&Fr::one()
-        );
+        assert!(bool::from(Fr::zero().invert().is_none()));
+        assert_eq!(Fr::one().invert().unwrap(), Fr::one());
+        assert_eq!((-&Fr::one()).invert().unwrap(), -&Fr::one());
 
-        let mut tmp = Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R2);
+        let mut tmp = Fr::from_raw(FR_R2);
 
         for _ in 0..10 {
             let mut tmp2 = tmp.invert().unwrap();
@@ -928,7 +902,7 @@ mod test {
 
             assert_eq!(tmp2, Fr::one());
 
-            tmp.add_assign(&Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R2));
+            tmp.add_assign(&Fr::from_raw(FR_R2));
         }
     }
 
@@ -941,9 +915,9 @@ mod test {
             0x73ed_a753_299d_7d48,
         ];
 
-        let mut r1 = Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R);
-        let mut r2 = Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R);
-        let mut r3 = Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R);
+        let mut r1 = Fr::from_raw(FR_R);
+        let mut r2 = Fr::from_raw(FR_R);
+        let mut r3 = Fr::from_raw(FR_R);
 
         for _ in 0..10 {
             r1 = r1.invert().unwrap();
@@ -953,7 +927,7 @@ mod test {
             assert_eq!(r1, r2);
             assert_eq!(r2, r3);
             // Add R so we check something different next time around
-            r1.add_assign(&Fr::<Bls12381Curve>::from_raw(Bls12381Curve::FR_R));
+            r1.add_assign(&Fr::from_raw(FR_R));
             r2 = r1;
             r3 = r1;
         }
@@ -962,12 +936,12 @@ mod test {
     #[test]
     fn test_sqrt() {
         {
-            assert_eq!(Fr::<Bls12381Curve>::zero().sqrt().unwrap(), Fr::zero());
+            assert_eq!(Fr::zero().sqrt().unwrap(), Fr::zero());
         }
 
         let mut none_count = 0;
         for i in 0..100 {
-            let square = Fr::<Bls12381Curve>::from_u128(i);
+            let square = Fr::from_u128(i);
             let square_root = square.sqrt();
             if bool::from(square_root.is_none()) {
                 none_count += 1;
@@ -982,7 +956,7 @@ mod test {
 
     #[test]
     fn test_double() {
-        let a = Fr::<Bls12381Curve>::from_raw([
+        let a = Fr::from_raw([
             0x1fff_3231_233f_fffd,
             0x4884_b7fa_0003_4802,
             0x998c_4fef_ecbc_4ff3,

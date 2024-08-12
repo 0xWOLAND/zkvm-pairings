@@ -1,5 +1,3 @@
-use crate::common::Bls12381Curve;
-use crate::common::Curve;
 use crate::fp::*;
 use crate::fp2::*;
 use crate::fp6::*;
@@ -14,71 +12,71 @@ use rand::RngCore;
 use rand_core::RngCore;
 
 /// This represents an element $c_0 + c_1 w$ of $\mathbb{F}_{p^12} = \mathbb{F}_{p^6} / w^2 - v$.
-pub struct Fp12<C: Curve> {
-    pub c0: Fp6<C>,
-    pub c1: Fp6<C>,
+pub struct Fp12 {
+    pub c0: Fp6,
+    pub c1: Fp6,
 }
 
-impl<C: Curve> From<Fp<C>> for Fp12<C> {
-    fn from(f: Fp<C>) -> Fp12<C> {
+impl From<Fp> for Fp12 {
+    fn from(f: Fp) -> Fp12 {
         Fp12 {
-            c0: Fp6::<C>::from(f),
-            c1: Fp6::<C>::from(f),
+            c0: Fp6::from(f),
+            c1: Fp6::from(f),
         }
     }
 }
 
-impl<C: Curve> From<Fp2<C>> for Fp12<C> {
-    fn from(f: Fp2<C>) -> Fp12<C> {
+impl From<Fp2> for Fp12 {
+    fn from(f: Fp2) -> Fp12 {
         Fp12 {
-            c0: Fp6::<C>::from(f),
-            c1: Fp6::<C>::zero(),
+            c0: Fp6::from(f),
+            c1: Fp6::zero(),
         }
     }
 }
 
-impl<C: Curve> From<Fp6<C>> for Fp12<C> {
-    fn from(f: Fp6<C>) -> Fp12<C> {
+impl From<Fp6> for Fp12 {
+    fn from(f: Fp6) -> Fp12 {
         Fp12 {
             c0: f,
-            c1: Fp6::<C>::zero(),
+            c1: Fp6::zero(),
         }
     }
 }
 
-impl<C: Curve> Eq for Fp12<C> {}
-impl<C: Curve> PartialEq for Fp12<C> {
-    fn eq(&self, other: &Fp12<C>) -> bool {
+impl Eq for Fp12 {}
+impl PartialEq for Fp12 {
+    fn eq(&self, other: &Fp12) -> bool {
         self.c0 == other.c0 && self.c1 == other.c1
     }
 }
 
-impl<C: Curve> Copy for Fp12<C> {}
-impl<C: Curve> Clone for Fp12<C> {
+impl Copy for Fp12 {}
+impl Clone for Fp12 {
     #[inline]
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<C: Curve> Default for Fp12<C> {
+impl Default for Fp12 {
     fn default() -> Self {
-        Fp12::<C>::zero()
+        Fp12::zero()
     }
 }
 
 #[cfg(feature = "zeroize")]
-impl<C: Curve> zeroize::DefaultIsZeroes for Fp12 {}
+impl zeroize::DefaultIsZeroes for Fp12 {}
 
-impl<C: Curve> fmt::Debug for Fp12<C> {
+impl fmt::Debug for Fp12 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} + ({:?})*w", self.c0, self.c1)
     }
 }
 
-impl<C: Curve> Fp12<C> {
+impl Fp12 {
     #[inline]
-    pub fn new(c0: Fp6<C>, c1: Fp6<C>) -> Self {
+    pub fn new(c0: Fp6, c1: Fp6) -> Self {
         Fp12 { c0, c1 }
     }
 
@@ -92,11 +90,11 @@ impl<C: Curve> Fp12<C> {
         Fp12::new(Fp6::one(), Fp6::zero())
     }
 
-    pub fn from_bytes(bytes: &[u8; 576]) -> Fp12<C> {
-        let c0 = Fp6::<C>::from_bytes(&bytes[..288].try_into().unwrap());
-        let c1 = Fp6::<C>::from_bytes(&bytes[288..].try_into().unwrap());
+    pub fn from_bytes(bytes: &[u8; 576]) -> Fp12 {
+        let c0 = Fp6::from_bytes(&bytes[..288].try_into().unwrap());
+        let c1 = Fp6::from_bytes(&bytes[288..].try_into().unwrap());
 
-        Fp12::<C>::new(c0, c1)
+        Fp12::new(c0, c1)
     }
 
     pub fn to_bytes(&self) -> [u8; 576] {
@@ -112,12 +110,12 @@ impl<C: Curve> Fp12<C> {
 
     pub fn random(mut rng: impl RngCore) -> Self {
         Fp12 {
-            c0: Fp6::<C>::random(&mut rng),
-            c1: Fp6::<C>::random(&mut rng),
+            c0: Fp6::random(&mut rng),
+            c1: Fp6::random(&mut rng),
         }
     }
 
-    pub fn mul_by_014(&self, c0: &Fp2<C>, c1: &Fp2<C>, c4: &Fp2<C>) -> Fp12<C> {
+    pub fn mul_by_014(&self, c0: &Fp2, c1: &Fp2, c4: &Fp2) -> Fp12 {
         let aa = self.c0.mul_by_01(c0, c1);
         let bb = self.c1.mul_by_1(c4);
         let o = c1 + c4;
@@ -131,7 +129,7 @@ impl<C: Curve> Fp12<C> {
         Fp12 { c0, c1 }
     }
 
-    pub fn mul_14_by_14(d0: &Fp2<C>, d1: &Fp2<C>, c0: &Fp2<C>, c1: &Fp2<C>) -> [Fp2<C>; 5] {
+    pub fn mul_14_by_14(d0: &Fp2, d1: &Fp2, c0: &Fp2, c1: &Fp2) -> [Fp2; 5] {
         let x0 = d0 * c0;
         let x1 = d1 * c1;
         let x04 = c0 + d0;
@@ -141,12 +139,12 @@ impl<C: Curve> Fp12<C> {
         let tmp = x1 + x0;
         let x01 = x01 - tmp;
         let x14 = c1 + d1;
-        let z_c0_b0 = Fp2::<C>::non_residue() + x0;
+        let z_c0_b0 = Fp2::non_residue() + x0;
 
         [z_c0_b0, x01, x1, x04, x14]
     }
 
-    fn cyclotomic_square(&self) -> Fp12<C> {
+    fn cyclotomic_square(&self) -> Fp12 {
         let t0 = &self.c1.c1.square();
         let t1 = &self.c0.c0.square();
         let t6 = (&self.c1.c1 + &self.c0.c0).square();
@@ -190,11 +188,11 @@ impl<C: Curve> Fp12<C> {
         Fp12::new(Fp6::new(z00, z01, z02), Fp6::new(z10, z11, z12))
     }
 
-    fn n_cyclotomic_square(&self, by: u64) -> Fp12<C> {
+    fn n_cyclotomic_square(&self, by: u64) -> Fp12 {
         (0..by).fold(*self, |acc, _| acc.cyclotomic_square())
     }
 
-    pub fn powt(&self) -> Fp12<C> {
+    pub fn powt(&self) -> Fp12 {
         let a = self.cyclotomic_square();
         let a = a * self;
         let a = a.n_cyclotomic_square(2);
@@ -210,7 +208,7 @@ impl<C: Curve> Fp12<C> {
         a.cyclotomic_square()
     }
 
-    pub fn div(&self, rhs: &Fp12<C>) -> Fp12<C> {
+    pub fn div(&self, rhs: &Fp12) -> Fp12 {
         rhs.invert().unwrap() * self
     }
 
@@ -324,11 +322,11 @@ impl<C: Curve> Fp12<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fp12<C>> for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, 'b> Mul<&'b Fp12> for &'a Fp12 {
+    type Output = Fp12;
 
     #[inline]
-    fn mul(self, other: &'b Fp12<C>) -> Self::Output {
+    fn mul(self, other: &'b Fp12) -> Self::Output {
         let aa = self.c0 * other.c0;
         let bb = self.c1 * other.c1;
         let o = other.c0 + other.c1;
@@ -343,17 +341,17 @@ impl<'a, 'b, C: Curve> Mul<&'b Fp12<C>> for &'a Fp12<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Add<&'b Fp12<C>> for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, 'b> Add<&'b Fp12> for &'a Fp12 {
+    type Output = Fp12;
 
     #[inline]
-    fn add(self, rhs: &'b Fp12<C>) -> Self::Output {
+    fn add(self, rhs: &'b Fp12) -> Self::Output {
         Fp12::new(self.c0 + rhs.c0, self.c1 + rhs.c1)
     }
 }
 
-impl<'a, C: Curve> Neg for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a> Neg for &'a Fp12 {
+    type Output = Fp12;
 
     #[inline]
     fn neg(self) -> Self::Output {
@@ -361,8 +359,8 @@ impl<'a, C: Curve> Neg for &'a Fp12<C> {
     }
 }
 
-impl<C: Curve> Neg for Fp12<C> {
-    type Output = Fp12<C>;
+impl Neg for Fp12 {
+    type Output = Fp12;
 
     #[inline]
     fn neg(self) -> Self::Output {
@@ -370,46 +368,44 @@ impl<C: Curve> Neg for Fp12<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Sub<&'b Fp12<C>> for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, 'b> Sub<&'b Fp12> for &'a Fp12 {
+    type Output = Fp12;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp12<C>) -> Self::Output {
+    fn sub(self, rhs: &'b Fp12) -> Self::Output {
         Fp12::new(self.c0 - rhs.c0, self.c1 - rhs.c1)
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fp<C>> for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, 'b> Mul<&'b Fp> for &'a Fp12 {
+    type Output = Fp12;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp<C>) -> Fp12<C> {
+    fn mul(self, rhs: &'b Fp) -> Fp12 {
         Fp12::new(self.c0 * rhs, self.c1 * rhs)
     }
 }
 
-impl<'a, 'b, C: Curve> Div<&'b Fp12<C>> for &'a Fp12<C> {
-    type Output = Fp12<C>;
+impl<'a, 'b> Div<&'b Fp12> for &'a Fp12 {
+    type Output = Fp12;
 
     #[inline]
-    fn div(self, rhs: &'b Fp12<C>) -> Fp12<C> {
+    fn div(self, rhs: &'b Fp12) -> Fp12 {
         self.div(rhs)
     }
 }
 
-impl_binops_additive!(Fp12<C>, Fp12<C>);
-impl_binops_multiplicative!(Fp12<C>, Fp12<C>);
-impl_binops_multiplicative!(Fp12<C>, Fp<C>);
-impl_binops_divisible!(Fp12<C>, Fp12<C>);
+impl_binops_additive!(Fp12, Fp12);
+impl_binops_multiplicative!(Fp12, Fp12);
+impl_binops_multiplicative!(Fp12, Fp);
+impl_binops_divisible!(Fp12, Fp12);
 #[cfg(test)]
 mod test {
     use rand::thread_rng;
 
-    use crate::common::Bls12381Curve;
-
     use super::*;
 
-    fn fp12_rand() -> Fp12<Bls12381Curve> {
+    fn fp12_rand() -> Fp12 {
         Fp12::new(
             Fp6::new(
                 Fp2::random(&mut thread_rng()),
@@ -898,9 +894,9 @@ mod test {
         // because a and b and c are similar to each other and
         // I was lazy, this is just some arbitrary way to make
         // them a little more different
-        let a: Fp12<Bls12381Curve> = a.square().invert().unwrap().square() + c;
-        let b: Fp12<Bls12381Curve> = b.square().invert().unwrap().square() + a;
-        let c: Fp12<Bls12381Curve> = c.square().invert().unwrap().square() + b;
+        let a: Fp12 = a.square().invert().unwrap().square() + c;
+        let b: Fp12 = b.square().invert().unwrap().square() + a;
+        let c: Fp12 = c.square().invert().unwrap().square() + b;
 
         assert_eq!(a.square(), a * a);
         assert_eq!(b.square(), b * b);
@@ -971,14 +967,9 @@ mod test {
 
     #[test]
     fn test_from_bytes() {
-        // let bytes = Fp::<Bls12381Curve>::one().to_bytes_unsafe();
+        // let bytes = Fp::one().to_bytes_unsafe();
         // println!("{:?}", bytes);
-        assert_eq!(
-            Fp2::<Bls12381Curve>::from_bytes(&Fp2::<Bls12381Curve>::to_bytes(
-                &Fp2::<Bls12381Curve>::one()
-            )),
-            Fp2::<Bls12381Curve>::one()
-        );
+        assert_eq!(Fp2::from_bytes(&Fp2::to_bytes(&Fp2::one())), Fp2::one());
     }
 }
 
@@ -996,7 +987,7 @@ fn test_zeroize() {
 fn test_frobenius() {
     use rand::thread_rng;
     for _ in 0..10 {
-        let a = Fp12::<Bls12381Curve>::random(&mut thread_rng());
+        let a = Fp12::random(&mut thread_rng());
         assert_eq!(
             a,
             a.frobenius_map()

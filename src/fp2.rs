@@ -9,41 +9,40 @@ cfg_if::cfg_if! {
     }
 }
 
-use crate::common::{Curve, FieldElement};
 use crate::fp::Fp;
 
 #[derive(Copy, Clone)]
 /// Represents an element in the field Fp2.
-pub struct Fp2<C: Curve> {
+pub struct Fp2 {
     /// The first component of the Fp2 element.
-    pub c0: Fp<C>,
+    pub c0: Fp,
     /// The second component of the Fp2 element.
-    pub c1: Fp<C>,
+    pub c1: Fp,
 }
 
-impl<C: Curve> fmt::Debug for Fp2<C> {
+impl fmt::Debug for Fp2 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} + {:?}*u", self.c0, self.c1)
     }
 }
 
-impl<C: Curve> Default for Fp2<C> {
+impl Default for Fp2 {
     fn default() -> Self {
         Fp2::zero()
     }
 }
 
 #[cfg(feature = "zeroize")]
-impl<C: Curve> zeroize::DefaultIsZeroes for Fp2<C> {}
+impl zeroize::DefaultIsZeroes for Fp2 {}
 
-impl<C: Curve> From<Fp<C>> for Fp2<C> {
-    fn from(f: Fp<C>) -> Fp2<C> {
+impl From<Fp> for Fp2 {
+    fn from(f: Fp) -> Fp2 {
         Fp2 { c0: f, c1: f }
     }
 }
 
-impl<C: Curve> Eq for Fp2<C> {}
-impl<C: Curve> PartialEq for Fp2<C> {
+impl Eq for Fp2 {}
+impl PartialEq for Fp2 {
     #[inline]
     fn eq(&self, other: &Self) -> bool {
         self.c0.eq(&other.c0) & self.c1.eq(&other.c1)
@@ -54,92 +53,92 @@ impl<C: Curve> PartialEq for Fp2<C> {
     }
 }
 
-impl<'a, C: Curve> Neg for &'a Fp2<C> {
-    type Output = Fp2<C>;
+impl<'a> Neg for &'a Fp2 {
+    type Output = Fp2;
 
     #[inline]
-    fn neg(self) -> Fp2<C> {
+    fn neg(self) -> Fp2 {
         self.neg()
     }
 }
 
-impl<C: Curve> Neg for Fp2<C> {
-    type Output = Fp2<C>;
+impl Neg for Fp2 {
+    type Output = Fp2;
 
     #[inline]
-    fn neg(self) -> Fp2<C> {
+    fn neg(self) -> Fp2 {
         -&self
     }
 }
 
-impl<'a, 'b, C: Curve> Sub<&'b Fp2<C>> for &'a Fp2<C> {
-    type Output = Fp2<C>;
+impl<'a, 'b> Sub<&'b Fp2> for &'a Fp2 {
+    type Output = Fp2;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp2<C>) -> Fp2<C> {
+    fn sub(self, rhs: &'b Fp2) -> Fp2 {
         self.sub(rhs)
     }
 }
 
-impl<'a, 'b, C: Curve> Add<&'b Fp2<C>> for &'a Fp2<C> {
-    type Output = Fp2<C>;
+impl<'a, 'b> Add<&'b Fp2> for &'a Fp2 {
+    type Output = Fp2;
 
     #[inline]
-    fn add(self, rhs: &'b Fp2<C>) -> Fp2<C> {
+    fn add(self, rhs: &'b Fp2) -> Fp2 {
         self.add(rhs)
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fp2<C>> for &'a Fp2<C> {
-    type Output = Fp2<C>;
+impl<'a, 'b> Mul<&'b Fp2> for &'a Fp2 {
+    type Output = Fp2;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp2<C>) -> Fp2<C> {
+    fn mul(self, rhs: &'b Fp2) -> Fp2 {
         self.mul(rhs)
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fp<C>> for &'a Fp2<C> {
-    type Output = Fp2<C>;
+impl<'a, 'b> Mul<&'b Fp> for &'a Fp2 {
+    type Output = Fp2;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp<C>) -> Fp2<C> {
+    fn mul(self, rhs: &'b Fp) -> Fp2 {
         Fp2::new(self.c0 * rhs, self.c1 * rhs)
     }
 }
 
-impl<'a, 'b, C: Curve> Div<&'b Fp2<C>> for &'a Fp2<C> {
-    type Output = Fp2<C>;
+impl<'a, 'b> Div<&'b Fp2> for &'a Fp2 {
+    type Output = Fp2;
 
     #[inline]
-    fn div(self, rhs: &'b Fp2<C>) -> Fp2<C> {
+    fn div(self, rhs: &'b Fp2) -> Fp2 {
         self.div(rhs)
     }
 }
 
-impl_binops_additive!(Fp2<C>, Fp2<C>);
-impl_binops_multiplicative!(Fp2<C>, Fp2<C>);
-impl_binops_multiplicative!(Fp2<C>, Fp<C>);
-impl_binops_divisible!(Fp2<C>, Fp2<C>);
+impl_binops_additive!(Fp2, Fp2);
+impl_binops_multiplicative!(Fp2, Fp2);
+impl_binops_multiplicative!(Fp2, Fp);
+impl_binops_divisible!(Fp2, Fp2);
 
-impl<C: Curve> Fp2<C> {
+impl Fp2 {
     /// Returns the zero element of Fp2.
     #[inline]
-    pub const fn zero() -> Fp2<C> {
+    pub const fn zero() -> Fp2 {
         Fp2::new(Fp::zero(), Fp::zero())
     }
 
     /// Returns the one element of Fp2.
     #[inline]
-    pub const fn one() -> Fp2<C> {
+    pub const fn one() -> Fp2 {
         Fp2::new(Fp::one(), Fp::zero())
     }
 
-    pub const fn new(c0: Fp<C>, c1: Fp<C>) -> Fp2<C> {
+    pub const fn new(c0: Fp, c1: Fp) -> Fp2 {
         Fp2 { c0, c1 }
     }
 
-    pub const fn non_residue() -> Fp2<C> {
+    pub const fn non_residue() -> Fp2 {
         Fp2::new(Fp::one(), Fp::one())
     }
 
@@ -153,13 +152,13 @@ impl<C: Curve> Fp2<C> {
     }
 
     /// Generates a random element in Fp2.
-    pub fn random(mut rng: impl RngCore) -> Fp2<C> {
+    pub fn random(mut rng: impl RngCore) -> Fp2 {
         Fp2::new(Fp::random(&mut rng), Fp::random(&mut rng))
     }
 
-    pub fn from_bytes(bytes: &[u8; 96]) -> Fp2<C> {
-        let c0 = Fp::<C>::from_bytes_unsafe(&bytes[..48].try_into().unwrap());
-        let c1 = Fp::<C>::from_bytes_unsafe(&bytes[48..].try_into().unwrap());
+    pub fn from_bytes(bytes: &[u8; 96]) -> Fp2 {
+        let c0 = Fp::from_bytes_unsafe(&bytes[..48].try_into().unwrap());
+        let c1 = Fp::from_bytes_unsafe(&bytes[48..].try_into().unwrap());
         Fp2::new(c0, c1)
     }
 
@@ -186,7 +185,7 @@ impl<C: Curve> Fp2<C> {
 
     /// Multiplies this element by the non-residue.
     #[inline(always)]
-    pub fn mul_by_nonresidue(&self) -> Fp2<C> {
+    pub fn mul_by_nonresidue(&self) -> Fp2 {
         // Multiply a + bu by u + 1, getting
         // au + a + bu^2 + bu
         // and because u^2 = -1, we get
@@ -196,7 +195,7 @@ impl<C: Curve> Fp2<C> {
     }
 
     /// Computes the square of this element.
-    pub fn square(&self) -> Fp2<C> {
+    pub fn square(&self) -> Fp2 {
         // Complex squaring:
         //
         // v0  = c0 * c1
@@ -218,7 +217,7 @@ impl<C: Curve> Fp2<C> {
 
     /// Multiplies this element by another element.
     #[cfg(not(target_os = "zkvm"))]
-    pub fn mul(&self, rhs: &Fp2<C>) -> Fp2<C> {
+    pub fn mul(&self, rhs: &Fp2) -> Fp2 {
         // F_{p^2} x F_{p^2} multiplication implemented with operand scanning (schoolbook)
         // computes the result as:
         //
@@ -239,71 +238,71 @@ impl<C: Curve> Fp2<C> {
 
     /// Multiplies this element by another element.
     #[cfg(target_os = "zkvm")]
-    pub fn mul(&self, rhs: &Fp2<C>) -> Fp2<C> {
+    pub fn mul(&self, rhs: &Fp2) -> Fp2 {
         unsafe {
-            let mut lhs = transmute::<Fp2<C>, [u32; 24]>(*self);
-            let rhs = transmute::<Fp2<C>, [u32; 24]>(*rhs);
+            let mut lhs = transmute::<Fp2, [u32; 24]>(*self);
+            let rhs = transmute::<Fp2, [u32; 24]>(*rhs);
             // bls12381_sys_bigint(&mut result, 0, lhs, rhs);
             syscall_bls12381_fp2_mulmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            *transmute::<&mut [u32; 24], &Fp2<C>>(&mut lhs)
+            *transmute::<&mut [u32; 24], &Fp2>(&mut lhs)
         }
     }
 
-    pub fn div(&self, rhs: &Fp2<C>) -> Fp2<C> {
+    pub fn div(&self, rhs: &Fp2) -> Fp2 {
         self * rhs.invert().unwrap()
     }
 
     /// Adds another element to this element.
     #[cfg(not(target_os = "zkvm"))]
-    pub fn add(&self, rhs: &Fp2<C>) -> Fp2<C> {
+    pub fn add(&self, rhs: &Fp2) -> Fp2 {
         Fp2::new((&self.c0).add(&rhs.c0), (&self.c1).add(&rhs.c1))
     }
 
     /// Adds another element to this element.
     #[cfg(target_os = "zkvm")]
-    pub fn add(&self, rhs: &Fp2<C>) -> Fp2<C> {
+    pub fn add(&self, rhs: &Fp2) -> Fp2 {
         unsafe {
-            let mut lhs = transmute::<Fp2<C>, [u32; 24]>(*self);
-            let rhs = transmute::<Fp2<C>, [u32; 24]>(*rhs);
+            let mut lhs = transmute::<Fp2, [u32; 24]>(*self);
+            let rhs = transmute::<Fp2, [u32; 24]>(*rhs);
             syscall_bls12381_fp2_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            *transmute::<&mut [u32; 24], &Fp2<C>>(&mut lhs)
+            *transmute::<&mut [u32; 24], &Fp2>(&mut lhs)
         }
     }
 
     /// Subtracts another element from this element.
     #[cfg(not(target_os = "zkvm"))]
-    pub fn sub(&self, rhs: &Fp2<C>) -> Fp2<C> {
+    pub fn sub(&self, rhs: &Fp2) -> Fp2 {
         Fp2::new((&self.c0).sub(&rhs.c0), (&self.c1).sub(&rhs.c1))
     }
 
     /// Subtracts another element from this element.
     #[cfg(target_os = "zkvm")]
-    pub fn sub(&self, rhs: &Fp2<C>) -> Fp2<C> {
+    pub fn sub(&self, rhs: &Fp2) -> Fp2 {
         unsafe {
-            let mut lhs = transmute::<Fp2<C>, [u32; 24]>(*self);
-            let rhs = transmute::<Fp2<C>, [u32; 24]>(*rhs);
+            let mut lhs = transmute::<Fp2, [u32; 24]>(*self);
+            let rhs = transmute::<Fp2, [u32; 24]>(*rhs);
             syscall_bls12381_fp2_submod(lhs.as_mut_ptr(), rhs.as_ptr());
-            *transmute::<&mut [u32; 24], &Fp2<C>>(&mut lhs)
+            *transmute::<&mut [u32; 24], &Fp2>(&mut lhs)
         }
     }
 
     /// Negates this element.
     #[cfg(not(target_os = "zkvm"))]
-    pub fn neg(&self) -> Fp2<C> {
+    pub fn neg(&self) -> Fp2 {
         Fp2::new((&self.c0).neg(), (&self.c1).neg())
     }
 
     /// Negates this element.
     #[cfg(target_os = "zkvm")]
-    pub fn neg(&self) -> Fp2<C> {
+    pub fn neg(&self) -> Fp2 {
         unsafe {
             let rhs = transmute::<[u64; 6], [u32; 12]>(C::MODULUS);
             let rhs_ptr = rhs.as_ptr();
 
-            let mut lhs_c0 = transmute::<Fp<C>, [u32; 12]>(self.c0);
+            let mut lhs_c0 = transmute::<Fp, [u32; 12]>(self.c0);
             syscall_bls12381_fp2_submod(lhs_c0.as_mut_ptr(), rhs_ptr);
 
-            let mut lhs_c1 = transmute::<Fp<C>, [u32; 12]>(self.c1);
+            let mut lhs_c1 = transmute::<Fp, [u32; 12]>(self.c1);
             syscall_bls12381_fp2_submod(lhs_c1.as_mut_ptr(), rhs_ptr);
 
             Fp2::new(
@@ -316,7 +315,7 @@ impl<C: Curve> Fp2<C> {
     /// Computes the square root of this element.
     pub fn sqrt(&self) -> Option<Self> {
         if self.is_zero() {
-            return Some(Fp2::<C>::zero());
+            return Some(Fp2::zero());
         }
 
         // a1 = self^((p - 3) / 4)
@@ -405,8 +404,6 @@ impl<C: Curve> Fp2<C> {
     }
 }
 
-impl<C: Curve> FieldElement for Fp2<C> {} // For `AffinePoint` trait
-
 #[cfg(test)]
 mod test {
     use std::mem::transmute;
@@ -414,11 +411,11 @@ mod test {
     use num_bigint::BigUint;
     use rand::Rng;
 
-    use crate::common::Bls12381Curve;
+    use crate::common::MODULUS;
 
     use super::*;
 
-    fn fp2_rand() -> Fp2<Bls12381Curve> {
+    fn fp2_rand() -> Fp2 {
         let mut rng = rand::thread_rng();
         Fp2::random(&mut rng)
     }
@@ -430,12 +427,12 @@ mod test {
             let x = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
             let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
-            let a = Fp2::<Bls12381Curve>::new(
+            let a = Fp2::new(
                 Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
                 Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
             );
 
-            let b = Fp2::<Bls12381Curve>::new(
+            let b = Fp2::new(
                 Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
                 Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
             );
@@ -579,8 +576,7 @@ mod test {
     #[test]
     fn test_lexicographic_largest() {
         unsafe {
-            let modulus =
-                BigUint::from_slice(&transmute::<[u64; 6], [u32; 12]>(Bls12381Curve::MODULUS));
+            let modulus = BigUint::from_slice(&transmute::<[u64; 6], [u32; 12]>(MODULUS));
 
             let gen_test_value = || {
                 let mut rng = rand::thread_rng();
@@ -590,7 +586,7 @@ mod test {
                 let mut a_bytes = a.to_bytes_le();
                 a_bytes.resize(48, 0);
 
-                let a_fp = Fp::<Bls12381Curve>::from_bytes_unsafe(&a_bytes.try_into().unwrap());
+                let a_fp = Fp::from_bytes_unsafe(&a_bytes.try_into().unwrap());
                 (a, a_inv, a_fp)
             };
 
@@ -608,7 +604,7 @@ mod test {
                 let (a, a_inv, a_fp) = gen_test_value();
                 let b = BigUint::ZERO;
                 let b_inv = BigUint::ZERO;
-                let b_fp = Fp::<Bls12381Curve>::zero();
+                let b_fp = Fp::zero();
 
                 let lhs = Fp2::new(a_fp, b_fp).lexicographically_largest();
                 let rhs = b > b_inv || (b == BigUint::ZERO && a > a_inv);
@@ -622,7 +618,7 @@ mod test {
     fn test_frobenius() {
         use rand::thread_rng;
         for _ in 0..10 {
-            let f = Fp2::<Bls12381Curve>::random(&mut thread_rng());
+            let f = Fp2::random(&mut thread_rng());
             let frob = f.frobenius_map().frobenius_map();
             assert_eq!(f, frob);
         }

@@ -1,4 +1,3 @@
-use crate::common::Curve;
 use crate::fp::*;
 use crate::fp2::*;
 
@@ -10,14 +9,14 @@ use rand::RngCore;
 use rand_core::RngCore;
 
 /// This represents an element $c_0 + c_1 v + c_2 v^2$ of $\mathbb{F}_{p^6} = \mathbb{F}_{p^2} / v^3 - u - 1$.
-pub struct Fp6<C: Curve> {
-    pub c0: Fp2<C>,
-    pub c1: Fp2<C>,
-    pub c2: Fp2<C>,
+pub struct Fp6 {
+    pub c0: Fp2,
+    pub c1: Fp2,
+    pub c2: Fp2,
 }
 
-impl<C: Curve> From<Fp<C>> for Fp6<C> {
-    fn from(f: Fp<C>) -> Fp6<C> {
+impl From<Fp> for Fp6 {
+    fn from(f: Fp) -> Fp6 {
         Fp6 {
             c0: Fp2::from(f),
             c1: Fp2::from(f),
@@ -26,8 +25,8 @@ impl<C: Curve> From<Fp<C>> for Fp6<C> {
     }
 }
 
-impl<C: Curve> From<Fp2<C>> for Fp6<C> {
-    fn from(f: Fp2<C>) -> Fp6<C> {
+impl From<Fp2> for Fp6 {
+    fn from(f: Fp2) -> Fp6 {
         Fp6 {
             c0: f,
             c1: Fp2::zero(),
@@ -36,40 +35,40 @@ impl<C: Curve> From<Fp2<C>> for Fp6<C> {
     }
 }
 
-impl<C: Curve> PartialEq for Fp6<C> {
-    fn eq(&self, other: &Fp6<C>) -> bool {
+impl PartialEq for Fp6 {
+    fn eq(&self, other: &Fp6) -> bool {
         self.c0 == other.c0 && self.c1 == other.c1 && self.c2 == other.c2
     }
 }
 
-impl<C: Curve> Copy for Fp6<C> {}
-impl<C: Curve> Clone for Fp6<C> {
+impl Copy for Fp6 {}
+impl Clone for Fp6 {
     #[inline]
     fn clone(&self) -> Self {
         *self
     }
 }
 
-impl<C: Curve> Default for Fp6<C> {
+impl Default for Fp6 {
     fn default() -> Self {
         Fp6::zero()
     }
 }
 
 #[cfg(feature = "zeroize")]
-impl<C: Curve> zeroize::DefaultIsZeroes for Fp6<C> {}
+impl zeroize::DefaultIsZeroes for Fp6 {}
 
-impl<C: Curve> fmt::Debug for Fp6<C> {
+impl fmt::Debug for Fp6 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?} + ({:?})*v + ({:?})*v^2", self.c0, self.c1, self.c2)
     }
 }
 
-impl<C: Curve> Eq for Fp6<C> {}
+impl Eq for Fp6 {}
 
-impl<C: Curve> Fp6<C> {
+impl Fp6 {
     #[inline]
-    pub fn new(c0: Fp2<C>, c1: Fp2<C>, c2: Fp2<C>) -> Self {
+    pub fn new(c0: Fp2, c1: Fp2, c2: Fp2) -> Self {
         Fp6 { c0, c1, c2 }
     }
 
@@ -91,7 +90,7 @@ impl<C: Curve> Fp6<C> {
         }
     }
 
-    pub(crate) fn random(mut rng: impl RngCore) -> Fp6<C> {
+    pub(crate) fn random(mut rng: impl RngCore) -> Fp6 {
         Fp6 {
             c0: Fp2::random(&mut rng),
             c1: Fp2::random(&mut rng),
@@ -99,7 +98,7 @@ impl<C: Curve> Fp6<C> {
         }
     }
 
-    pub fn from_bytes(bytes: &[u8; 288]) -> Fp6<C> {
+    pub fn from_bytes(bytes: &[u8; 288]) -> Fp6 {
         let mut c0_bytes = [0u8; 96];
         let mut c1_bytes = [0u8; 96];
         let mut c2_bytes = [0u8; 96];
@@ -112,7 +111,7 @@ impl<C: Curve> Fp6<C> {
         let c1 = Fp2::from_bytes(&c1_bytes);
         let c2 = Fp2::from_bytes(&c2_bytes);
 
-        Fp6::<C>::new(c0, c1, c2)
+        Fp6::new(c0, c1, c2)
     }
 
     pub fn to_bytes(&self) -> [u8; 288] {
@@ -128,7 +127,7 @@ impl<C: Curve> Fp6<C> {
         res
     }
 
-    pub fn mul_by_1(&self, c1: &Fp2<C>) -> Fp6<C> {
+    pub fn mul_by_1(&self, c1: &Fp2) -> Fp6 {
         Fp6 {
             c0: (self.c2 * c1).mul_by_nonresidue(),
             c1: self.c0 * c1,
@@ -136,7 +135,7 @@ impl<C: Curve> Fp6<C> {
         }
     }
 
-    pub fn mul_by_01(&self, c0: &Fp2<C>, c1: &Fp2<C>) -> Fp6<C> {
+    pub fn mul_by_01(&self, c0: &Fp2, c1: &Fp2) -> Fp6 {
         let a_a = self.c0 * c0;
         let b_b = self.c1 * c1;
 
@@ -303,20 +302,20 @@ impl<C: Curve> Fp6<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fp6<C>> for &'a Fp6<C> {
-    type Output = Fp6<C>;
+impl<'a, 'b> Mul<&'b Fp6> for &'a Fp6 {
+    type Output = Fp6;
 
     #[inline]
-    fn mul(self, other: &'b Fp6<C>) -> Self::Output {
+    fn mul(self, other: &'b Fp6) -> Self::Output {
         self.mul_interleaved(other)
     }
 }
 
-impl<'a, 'b, C: Curve> Add<&'b Fp6<C>> for &'a Fp6<C> {
-    type Output = Fp6<C>;
+impl<'a, 'b> Add<&'b Fp6> for &'a Fp6 {
+    type Output = Fp6;
 
     #[inline]
-    fn add(self, rhs: &'b Fp6<C>) -> Self::Output {
+    fn add(self, rhs: &'b Fp6) -> Self::Output {
         Fp6 {
             c0: self.c0 + rhs.c0,
             c1: self.c1 + rhs.c1,
@@ -325,8 +324,8 @@ impl<'a, 'b, C: Curve> Add<&'b Fp6<C>> for &'a Fp6<C> {
     }
 }
 
-impl<'a, C: Curve> Neg for &'a Fp6<C> {
-    type Output = Fp6<C>;
+impl<'a> Neg for &'a Fp6 {
+    type Output = Fp6;
 
     #[inline]
     fn neg(self) -> Self::Output {
@@ -338,8 +337,8 @@ impl<'a, C: Curve> Neg for &'a Fp6<C> {
     }
 }
 
-impl<C: Curve> Neg for Fp6<C> {
-    type Output = Fp6<C>;
+impl Neg for Fp6 {
+    type Output = Fp6;
 
     #[inline]
     fn neg(self) -> Self::Output {
@@ -347,11 +346,11 @@ impl<C: Curve> Neg for Fp6<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Sub<&'b Fp6<C>> for &'a Fp6<C> {
-    type Output = Fp6<C>;
+impl<'a, 'b> Sub<&'b Fp6> for &'a Fp6 {
+    type Output = Fp6;
 
     #[inline]
-    fn sub(self, rhs: &'b Fp6<C>) -> Fp6<C> {
+    fn sub(self, rhs: &'b Fp6) -> Fp6 {
         Fp6 {
             c0: self.c0 - rhs.c0,
             c1: self.c1 - rhs.c1,
@@ -360,11 +359,11 @@ impl<'a, 'b, C: Curve> Sub<&'b Fp6<C>> for &'a Fp6<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Mul<&'b Fp<C>> for &'a Fp6<C> {
-    type Output = Fp6<C>;
+impl<'a, 'b> Mul<&'b Fp> for &'a Fp6 {
+    type Output = Fp6;
 
     #[inline]
-    fn mul(self, rhs: &'b Fp<C>) -> Fp6<C> {
+    fn mul(self, rhs: &'b Fp) -> Fp6 {
         Fp6 {
             c0: self.c0 * rhs,
             c1: self.c1 * rhs,
@@ -373,29 +372,27 @@ impl<'a, 'b, C: Curve> Mul<&'b Fp<C>> for &'a Fp6<C> {
     }
 }
 
-impl<'a, 'b, C: Curve> Div<&'b Fp6<C>> for &'a Fp6<C> {
-    type Output = Fp6<C>;
+impl<'a, 'b> Div<&'b Fp6> for &'a Fp6 {
+    type Output = Fp6;
 
     #[inline]
-    fn div(self, rhs: &'b Fp6<C>) -> Fp6<C> {
+    fn div(self, rhs: &'b Fp6) -> Fp6 {
         self.div(rhs)
     }
 }
 
-impl_binops_additive!(Fp6<C>, Fp6<C>);
-impl_binops_multiplicative!(Fp6<C>, Fp6<C>);
-impl_binops_multiplicative!(Fp6<C>, Fp<C>);
-impl_binops_divisible!(Fp6<C>, Fp6<C>);
+impl_binops_additive!(Fp6, Fp6);
+impl_binops_multiplicative!(Fp6, Fp6);
+impl_binops_multiplicative!(Fp6, Fp);
+impl_binops_divisible!(Fp6, Fp6);
 
 #[cfg(test)]
 mod test {
     use rand::{thread_rng, Rng};
 
-    use crate::common::Bls12381Curve;
-
     use super::*;
 
-    fn fp6_rand() -> Fp6<Bls12381Curve> {
+    fn fp6_rand() -> Fp6 {
         Fp6 {
             c0: Fp2::random(&mut thread_rng()),
             c1: Fp2::random(&mut thread_rng()),
@@ -411,13 +408,13 @@ mod test {
             let y = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
             let a = Fp2::new(
-                Fp::<Bls12381Curve>::from_raw_unchecked(x.clone().try_into().unwrap()),
-                Fp::<Bls12381Curve>::from_raw_unchecked(y.clone().try_into().unwrap()),
+                Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
+                Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
             );
 
             let b = Fp2::new(
-                Fp::<Bls12381Curve>::from_raw_unchecked(x.clone().try_into().unwrap()),
-                Fp::<Bls12381Curve>::from_raw_unchecked(y.clone().try_into().unwrap()),
+                Fp::from_raw_unchecked(x.clone().try_into().unwrap()),
+                Fp::from_raw_unchecked(y.clone().try_into().unwrap()),
             );
 
             assert_eq!(a, b)
@@ -434,12 +431,12 @@ mod test {
             let y2 = (0..6).map(|_| rng.gen::<u64>()).collect::<Vec<_>>();
 
             let a = Fp2::new(
-                Fp::<Bls12381Curve>::from_raw_unchecked(x1.clone().try_into().unwrap()),
-                Fp::<Bls12381Curve>::from_raw_unchecked(y1.clone().try_into().unwrap()),
+                Fp::from_raw_unchecked(x1.clone().try_into().unwrap()),
+                Fp::from_raw_unchecked(y1.clone().try_into().unwrap()),
             );
             let b = Fp2::new(
-                Fp::<Bls12381Curve>::from_raw_unchecked(x2.try_into().unwrap()),
-                Fp::<Bls12381Curve>::from_raw_unchecked(y2.try_into().unwrap()),
+                Fp::from_raw_unchecked(x2.try_into().unwrap()),
+                Fp::from_raw_unchecked(y2.try_into().unwrap()),
             );
 
             assert_ne!(a, b)
@@ -515,16 +512,14 @@ mod test {
 
     #[test]
     fn test_sqrt() {
-        let sqr1 = Fp::<Bls12381Curve>::from_raw_unchecked([300855555557, 0, 0, 0, 0, 0])
+        let sqr1 = Fp::from_raw_unchecked([300855555557, 0, 0, 0, 0, 0])
             .sqrt()
             .unwrap();
         assert_eq!(format!("{:?}", sqr1), "0x025e51146a92917731d9d66d63f8c24ed8cae114e7c9d188e3eaa1e79bb19769f5877f9443e03723d9ed1eebbf92df98");
 
-        assert!(
-            Fp::<Bls12381Curve>::from_raw_unchecked([72057594037927816, 0, 0, 0, 0, 0])
-                .sqrt()
-                .is_none()
-        );
+        assert!(Fp::from_raw_unchecked([72057594037927816, 0, 0, 0, 0, 0])
+            .sqrt()
+            .is_none());
     }
 
     #[test]
@@ -556,7 +551,7 @@ mod test {
     fn test_arithmetic() {
         use crate::fp::*;
 
-        let a = Fp6::<Bls12381Curve>::new(
+        let a = Fp6::new(
             Fp2::new(
                 Fp::from_raw_unchecked([
                     0x47f9_cb98_b1b8_2d58,
