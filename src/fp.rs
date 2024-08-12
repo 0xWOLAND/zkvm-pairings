@@ -12,7 +12,7 @@ use std::marker::PhantomData;
 cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
         use sp1_zkvm::syscalls::{syscall_bls12381_fp_mulmod, syscall_bls12381_fp_addmod, syscall_bls12381_fp_submod};
-        use sp1_zkvm::lib::{io, unconstrained};
+        use sp1_zkvm::lib::{io::{self, FD_HINT}, unconstrained};
     }
 }
 
@@ -274,6 +274,20 @@ impl Fp {
         res
     }
 
+    pub(crate) fn pow_vartime_unconstrained(&self, by: &[u64; 6]) -> Self {
+        let mut res = Self::one();
+        for e in by.iter().rev() {
+            for i in (0..64).rev() {
+                res = res._mul(&res);
+
+                if ((*e >> i) & 1) == 1 {
+                    res = res._mul(self);
+                }
+            }
+        }
+        res
+    }
+
     #[inline]
     /// Computes the square root of this field element.
     pub fn sqrt(&self) -> Option<Self> {
@@ -295,13 +309,9 @@ impl Fp {
     }
 
     #[inline]
-    /// Computes the multiplicative inverse of this field
-    /// element, returning None in the case that this element
-    /// is zero.
-    #[cfg(not(target_os = "zkvm"))]
-    pub fn invert(&self) -> Option<Self> {
+    pub(crate) fn _invert(&self) -> Option<Self> {
         // Exponentiate by p - 2
-        let inv = self.pow_vartime(&[
+        let inv = self.pow_vartime_unconstrained(&[
             0xb9fe_ffff_ffff_aaa9,
             0x1eab_fffe_b153_ffff,
             0x6730_d2a0_f6b0_f624,
@@ -313,38 +323,32 @@ impl Fp {
         Some(inv).filter(|_| !self.is_zero())
     }
 
-    #[cfg(target_os = "zkvm")]
     pub fn invert(&self) -> Option<Self> {
-        use sp1_zkvm::io::FD_HINT;
+        #[cfg(all(target_os = "zkvm", target_vendor = "succinct"))]
+        {
+            // Compute the inverse using the zkvm syscall
+            unconstrained! {
+                let mut buf = [0u8; 48];
+                buf.copy_from_slice(&self._invert().unwrap().to_bytes_unsafe());
+                io::write(FD_HINT, &buf);
+            }
 
-        // Compute the inverse using the zkvm syscall
-        unconstrained! {
-            let mut buf = [0u8; 48];
-            // Exponentiate by p - 2
-            let t = self.pow_vartime(&[
-                0xb9fe_ffff_ffff_aaa9,
-                0x1eab_fffe_b153_ffff,
-                0x6730_d2a0_f6b0_f624,
-                0x6477_4b84_f385_12bf,
-                0x4b1b_a7b6_434b_acd7,
-                0x1a01_11ea_397f_e69a,
-            ]);
-            buf.copy_from_slice(&t.to_bytes_unsafe());
-            io::write(FD_HINT, &buf);
+            let byte_vec = io::read_vec();
+            let bytes: [u8; 48] = byte_vec.try_into().unwrap();
+            unsafe {
+                let inv = Fp::from_bytes_unsafe(&bytes);
+                Some(inv).filter(|_| !self.is_zero() && self * inv == Fp::one())
+            }
         }
-
-        let byte_vec = io::read_vec();
-        let bytes: [u8; 48] = byte_vec.try_into().unwrap();
-        unsafe {
-            let inv = Fp::from_bytes_unsafe(&bytes);
-            Some(inv).filter(|_| !self.is_zero() && self * inv == Fp::one())
+        #[cfg(not(all(target_os = "zkvm", target_vendor = "succinct")))]
+        {
+            self._invert()
         }
     }
 
     #[inline]
-    /// Add two field elements together.
-    #[cfg(not(target_os = "zkvm"))]
-    pub fn add(&self, rhs: &Fp) -> Fp {
+    /// Add ttarget_os = "zkvm"))]
+    pub(crate) fn _add(&self, rhs: &Fp) -> Fp {
         use num_bigint::BigUint;
 
         unsafe {
@@ -361,19 +365,25 @@ impl Fp {
         }
     }
 
-    #[cfg(target_os = "zkvm")]
-    pub fn add(&self, rhs: &Fp) -> Fp {
-        unsafe {
-            let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
-            let rhs = transmute::<[u64; 6], [u32; 12]>(rhs.0);
-            syscall_bls12381_fp_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs))
+    #[inline]
+    pub(crate) fn add(&self, rhs: &Fp) -> Fp {
+        #[cfg(all(target_os = "zkvm", target_vendor = "succinct"))]
+        {
+            unsafe {
+                let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
+                let rhs = transmute::<[u64; 6], [u32; 12]>(rhs.0);
+                syscall_bls12381_fp_addmod(lhs.as_mut_ptr(), rhs.as_ptr());
+                Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs))
+            }
+        }
+        #[cfg(not(all(target_os = "zkvm", target_vendor = "succinct")))]
+        {
+            self._add(rhs)
         }
     }
 
     #[inline]
-    #[cfg(not(target_os = "zkvm"))]
-    pub fn neg(&self) -> Fp {
+    pub fn _neg(&self) -> Fp {
         let (d0, borrow) = sbb(MODULUS[0], self.0[0], 0);
         let (d1, borrow) = sbb(MODULUS[1], self.0[1], borrow);
         let (d2, borrow) = sbb(MODULUS[2], self.0[2], borrow);
@@ -397,36 +407,45 @@ impl Fp {
         ])
     }
 
-    #[cfg(target_os = "zkvm")]
     pub fn neg(&self) -> Fp {
-        unsafe {
-            let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
-            let rhs = transmute::<[u64; 6], [u32; 12]>(MODULUS);
-            syscall_bls12381_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs))
+        #[cfg(all(target_os = "zkvm", target_vendor = "succinct"))]
+        {
+            unsafe {
+                let mut lhs = [0u32; 12];
+                let rhs = transmute::<[u64; 6], [u32; 12]>(self.0);
+                syscall_bls12381_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
+                Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs))
+            }
+        }
+        #[cfg(not(all(target_os = "zkvm", target_vendor = "succinct")))]
+        {
+            self._neg()
         }
     }
 
     #[inline]
-    #[cfg(not(target_os = "zkvm"))]
-    pub fn sub(&self, rhs: &Fp) -> Fp {
-        (&rhs.neg()).add(self)
+    pub fn _sub(&self, rhs: &Fp) -> Fp {
+        (&rhs._neg())._add(self)
     }
 
     #[inline]
-    #[cfg(target_os = "zkvm")]
     pub fn sub(&self, rhs: &Fp) -> Fp {
-        unsafe {
-            let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
-            let rhs = transmute::<[u64; 6], [u32; 12]>(rhs.0);
-            syscall_bls12381_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
-            Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs))
+        #[cfg(all(target_os = "zkvm", target_vendor = "succinct"))]
+        {
+            unsafe {
+                let mut lhs = transmute::<[u64; 6], [u32; 12]>(self.0);
+                let rhs = transmute::<[u64; 6], [u32; 12]>(rhs.0);
+                syscall_bls12381_fp_submod(lhs.as_mut_ptr(), rhs.as_ptr());
+                Fp::from_raw_unchecked(*transmute::<&mut [u32; 12], &mut [u64; 6]>(&mut lhs))
+            }
+        }
+        #[cfg(not(all(target_os = "zkvm", target_vendor = "succinct")))]
+        {
+            (&rhs.neg()).add(self)
         }
     }
     #[inline]
-    /// Multiplies two field elements
-    #[cfg(not(target_os = "zkvm"))]
-    pub fn mul(&self, rhs: &Fp) -> Fp {
+    pub(crate) fn _mul(&self, rhs: &Fp) -> Fp {
         use num_bigint::BigUint;
 
         unsafe {
@@ -444,6 +463,13 @@ impl Fp {
                 prod_slice.try_into().unwrap(),
             ))
         }
+    }
+
+    #[inline]
+    /// Multiplies two field elements
+    #[cfg(not(target_os = "zkvm"))]
+    pub fn mul(&self, rhs: &Fp) -> Fp {
+        self._mul(rhs)
     }
 
     /// Multiplies two field elements

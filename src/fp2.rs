@@ -216,6 +216,13 @@ impl Fp2 {
         Fp2::new((&a).mul(&b), (&c).mul(&self.c1))
     }
 
+    pub(crate) fn _mul(&self, rhs: &Fp2) -> Fp2 {
+        Fp2::new(
+            self.c0._mul(&rhs.c0)._sub(&self.c1._mul(&rhs.c1)),
+            self.c0._mul(&rhs.c1)._add(&self.c1._mul(&rhs.c0)),
+        )
+    }
+
     /// Multiplies this element by another element.
     #[cfg(not(target_os = "zkvm"))]
     pub fn mul(&self, rhs: &Fp2) -> Fp2 {
@@ -403,6 +410,23 @@ impl Fp2 {
         }
         res
     }
+
+    // /// Although this is labeled "vartime", it is only
+    // /// variable time with respect to the exponent. It
+    // /// is also not exposed in the public API.
+    // pub(crate) fn pow_vartime_unconstrained(&self, by: &[u64; 6]) -> Self {
+    //     let mut res = Self::one();
+    //     for e in by.iter().rev() {
+    //         for i in (0..64).rev() {
+    //             res = res._mul(&res);
+
+    //             if ((*e >> i) & 1) == 1 {
+    //                 res = res._mul(self);
+    //             }
+    //         }
+    //     }
+    //     res
+    // }
 }
 
 #[cfg(test)]
