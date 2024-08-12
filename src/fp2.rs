@@ -6,6 +6,7 @@ cfg_if::cfg_if! {
     if #[cfg(target_os = "zkvm")] {
         use sp1_zkvm::syscalls::{syscall_bls12381_fp2_addmod, syscall_bls12381_fp2_submod, syscall_bls12381_fp2_mulmod};
         use std::mem::transmute;
+        use crate::common::MODULUS;
     }
 }
 
@@ -296,7 +297,7 @@ impl Fp2 {
     #[cfg(target_os = "zkvm")]
     pub fn neg(&self) -> Fp2 {
         unsafe {
-            let rhs = transmute::<[u64; 6], [u32; 12]>(C::MODULUS);
+            let rhs = transmute::<[u64; 6], [u32; 12]>(MODULUS);
             let rhs_ptr = rhs.as_ptr();
 
             let mut lhs_c0 = transmute::<Fp, [u32; 12]>(self.c0);
